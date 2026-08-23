@@ -8,7 +8,7 @@ import edge_tts
 from moviepy import ImageClip, AudioFileClip, TextClip, CompositeVideoClip
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
-from oauth2client.client import Credentials
+from google.oauth2.credentials import Credentials
 
 async def generate_script():
     client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
@@ -57,10 +57,10 @@ def create_video(image_path: str, audio_path: str, output_path: str):
 
 def upload_to_youtube(video_path: str, title: str, tags: list):
     creds = Credentials(
-        None,
+        token=None,
+        refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"),
         client_id=os.environ.get("YOUTUBE_CLIENT_ID"),
         client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET"),
-        refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"),
         token_uri="https://oauth2.googleapis.com/token"
     )
     youtube = build("youtube", "v3", credentials=creds)
