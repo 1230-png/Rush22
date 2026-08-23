@@ -1,87 +1,106 @@
-# auto_pipeline.py
 import asyncio
-import json
 import os
+import json
+import tempfile
 from google import genai
 from google.genai import types
 import edge_tts
-from moviepy.editor import ImageClip, AudioFileClip, TextClip, CompositeVideoClip
-from google.oauth2.credentials import Credentials
+from moviepy import ImageClip, AudioFileClip, TextClip, CompositeVideoClip
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
+from oauth2client.client import Credentials
 
-async def generate_script(client: genai.Client) -> dict:
+async def generate_script():
+    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
     prompt = """
-    주제: 최신 기술 트렌드에 대한 1분 쇼츠 대본
-    조건: JSON 형식으로 반환할 것. 키는 'title', 'description', 'scenes' (각 씬은 'text'와 'image_prompt' 포함)
+    주제: 개발자가 알아야 할 최신 기술 트렌드 1가지.
+    조건: 유튜브 쇼츠용으로 흥미롭고 간결하게 작성.
+    반드시 아래 JSON 형식으로만 응답할 것 (마크다운 백틱 제외):
+    {
+      "title": "영상 제목",
+      "script": "음성 합성용 대본 텍스트",
+      "tags": ["태그1", "태그2"]
+    }
     """
     response = client.models.generate_content(
-        model='gemini-2.5-flash',
+        model="gemini-2.5-flash",
         contents=prompt,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json"
-        ),
     )
-    return json.loads(response.text)
+    text = response.text.strip()
+    if text.startswith("```json"):
+        text = text[7:-3].strip()
+    elif text.startswith("```"):
+        text = text[3:-3].strip()
+    return json.loads(text)
 
 async def generate_tts(text: str, output_path: str):
     communicate = edge_tts.Communicate(text, "ko-KR-SunHiNeural")
     await communicate.save(output_path)
 
-def create_video_clip(image_path: str, audio_path: str, text: str, output_path: str):
-    audio = AudioFileClip(audio_path)
-    duration = audio.duration
+def create_video(image_path: str, audio_path: str, output_path: str):
+    audio_clip = AudioFileClip(audio_path)
+    duration = audio_clip.duration
 
-    image_clip = ImageClip(image_path).set_duration(duration)
+    image_clip = ImageClip(image_path).with_duration(duration)
     
-    def zoom_in(get_frame, t):
-        img = get_frame(t)
-        return img
+    txt_clip = TextClip(
+        text="자동 생성된 유튜브 쇼츠",
+        font="Arial",
+        font_size=50,
+        color="white",
+        bg_color="black",
+        size=(image_clip.w, 100)
+    ).with_duration(duration).with_position(("center", "bottom"))
 
-    resized_clip = image_clip.fl(zoom_in, apply_to=['mask'])
-    
-    txt_clip = TextClip(text, fontsize=24, color='white', bg_color='black', size=(720, 100))
-    txt_clip = txt_clip.set_duration(duration).set_pos(('center', 'bottom'))
+    video = CompositeVideoClip([image_clip, txt_clip]).with_audio(audio_clip)
+    video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
 
-    video = CompositeVideoClip([resized_clip, txt_clip]).set_audio(audio)
-    video.write_videofile(output_path, fps=24, codec='libx264', audio_codec='aac')
-
-def upload_youtube(video_path: str, title: str, description: str):
-    credentials = Credentials(
-        token=None,
-        refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"),
-        token_uri="https://oauth2.googleapis.com/token",
+def upload_to_youtube(video_path: str, title: str, tags: list):
+    creds = Credentials(
+        None,
         client_id=os.environ.get("YOUTUBE_CLIENT_ID"),
         client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET"),
-        scopes=["https://www.googleapis.com/auth/youtube.upload"]
+        refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"),
+        token_uri="https://oauth2.googleapis.com/token"
     )
-    youtube = build("youtube", "v3", credentials=credentials)
-
-    request_body = {
+    youtube = build("youtube", "v3", credentials=creds)
+    
+    body = {
         "snippet": {
             "title": title,
-            "description": description,
-            "categoryId": "22"
+            "description": "Google AI & GitHub Actions 자동 생성 영상",
+            "tags": tags,
+            "categoryId": "28"
         },
         "status": {
-            "privacyStatus": "private"
+            "privacyStatus": "public"
         }
     }
     media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
-    request = youtube.videos().insert(part="snippet,status", body=request_body, media_body=media)
+    request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
     
     response = None
     while response is None:
         status, response = request.next_chunk()
+    print(f"업로드 완료! 영상 ID: {response.get('id')}")
 
 async def main():
-    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-    script_data = await generate_script(client)
-    
-    await generate_tts(script_data['scenes'][0]['text'], "audio.mp3")
-    create_video_clip("dummy.png", "audio.mp3", script_data['scenes'][0]['text'], "final_output.mp4")
-    
-    upload_youtube("final_output.mp4", script_data['title'], script_data['description'])
+    with tempfile.TemporaryDirectory() as tmpdir:
+        audio_path = os.path.join(tmpdir, "voice.mp3")
+        video_path = os.path.join(tmpdir, "final_output.mp4")
+        
+        print("1. 대본 생성 중...")
+        data = await generate_script()
+        print(f"생성된 제목: {data['title']}")
+        
+        print("2. TTS 음성 합성 중...")
+        await generate_tts(data["script"], audio_path)
+        
+        print("3. 영상 합성 중...")
+        create_video("dummy.png", audio_path, video_path)
+        
+        print("4. 유튜브 업로드 중...")
+        upload_to_youtube(video_path, data["title"], data["tags"])
 
 if __name__ == "__main__":
     asyncio.run(main())
