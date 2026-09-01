@@ -20,7 +20,7 @@ jobs:
       - name: 시스템 의존성(FFmpeg) 설치
         run: |
           sudo apt-get update
-          sudo apt-get install -y ffmpeg
+          sudo apt-get install -y ffmpeg fonts-noto-cjk
 
       - name: 파이썬 라이브러리 설치
         run: |
