@@ -4,12 +4,14 @@ import datetime
 import os
 import json
 import tempfile
+import textwrap
 from pathlib import Path
 
 from google import genai
 from google.genai import types
 import edge_tts
-from moviepy import ImageClip, AudioFileClip, TextClip, CompositeVideoClip
+from PIL import Image, ImageDraw, ImageFont
+from moviepy import ImageClip, AudioFileClip, CompositeVideoClip
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
@@ -17,6 +19,73 @@ from google.oauth2.credentials import Credentials
 ROOT = Path(__file__).resolve().parent
 TOPIC_BANK = ROOT / "topic_bank.json"
 USED_LOG = ROOT / "used_log.csv"
+
+WIDTH, HEIGHT = 1080, 1920
+
+# Tech/navy gradient, distinct per topic so videos aren't visually identical.
+PALETTES = [
+    ((18, 38, 68), (10, 58, 56)),    # navy -> teal
+    ((28, 24, 58), (12, 46, 58)),    # indigo -> teal
+    ((20, 30, 46), (46, 22, 58)),    # slate -> violet
+]
+
+FONT_CANDIDATES = [
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
+    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+    "C:/Windows/Fonts/malgunbd.ttf",
+    "C:/Windows/Fonts/malgun.ttf",
+]
+
+
+def find_korean_font() -> str:
+    for path in FONT_CANDIDATES:
+        if os.path.exists(path):
+            return path
+    raise RuntimeError("No Korean-capable font found; install fonts-noto-cjk")
+
+
+def pick_palette(seed: str):
+    idx = sum(ord(c) for c in seed) % len(PALETTES)
+    return PALETTES[idx]
+
+
+def draw_centered(draw, text, font, y, fill, wrap_width, canvas_width=WIDTH, line_gap=16):
+    lines = textwrap.wrap(text, width=wrap_width) or [text]
+    for line in lines:
+        bbox = draw.textbbox((0, 0), line, font=font)
+        w = bbox[2] - bbox[0]
+        h = bbox[3] - bbox[1]
+        draw.text(((canvas_width - w) / 2, y), line, font=font, fill=fill)
+        y += h + line_gap
+    return y
+
+
+def make_background(title: str, topic_id: str, font_path: str) -> Image.Image:
+    top_color, bottom_color = pick_palette(topic_id)
+    img = Image.new("RGB", (WIDTH, HEIGHT), top_color)
+    draw = ImageDraw.Draw(img)
+    for y in range(HEIGHT):
+        t = y / HEIGHT
+        r = int(top_color[0] + (bottom_color[0] - top_color[0]) * t)
+        g = int(top_color[1] + (bottom_color[1] - top_color[1]) * t)
+        b = int(top_color[2] + (bottom_color[2] - top_color[2]) * t)
+        draw.line([(0, y), (WIDTH, y)], fill=(r, g, b))
+
+    label_font = ImageFont.truetype(font_path, 44)
+    title_font = ImageFont.truetype(font_path, 66)
+    brand_font = ImageFont.truetype(font_path, 34)
+
+    y = 700
+    y = draw_centered(draw, "오늘의 기술 트렌드", label_font, y, (150, 220, 210), wrap_width=20)
+    y += 50
+    draw_centered(draw, title, title_font, y, (255, 255, 255), wrap_width=13)
+
+    brand = "Rush22 · 개발자 기술 트렌드"
+    bbox = draw.textbbox((0, 0), brand, font=brand_font)
+    bx = (WIDTH - (bbox[2] - bbox[0])) / 2
+    draw.text((bx, HEIGHT - 140), brand, font=brand_font, fill=(255, 255, 255))
+    return img
 
 
 def load_used_ids() -> set:
@@ -52,7 +121,7 @@ async def generate_script(topic: str):
     조건: 유튜브 쇼츠용으로 흥미롭고 간결하게 작성.
     반드시 아래 JSON 형식으로만 응답할 것 (마크다운 백틱 제외):
     {{
-      "title": "영상 제목",
+      "title": "영상 제목 (15자 내외, 화면에 표시될 짧은 제목)",
       "script": "음성 합성용 대본 텍스트",
       "tags": ["태그1", "태그2"]
     }}
@@ -77,19 +146,8 @@ async def generate_tts(text: str, output_path: str):
 def create_video(image_path: str, audio_path: str, output_path: str):
     audio_clip = AudioFileClip(audio_path)
     duration = audio_clip.duration
-
     image_clip = ImageClip(image_path).with_duration(duration)
-
-    txt_clip = TextClip(
-        text="자동 생성된 유튜브 쇼츠",
-        font="/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-        font_size=50,
-        color="white",
-        bg_color="black",
-        size=(image_clip.w, 100)
-    ).with_duration(duration).with_position(("center", "bottom"))
-
-    video = CompositeVideoClip([image_clip, txt_clip]).with_audio(audio_clip)
+    video = CompositeVideoClip([image_clip]).with_audio(audio_clip)
     video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
 
 
@@ -106,7 +164,7 @@ def upload_to_youtube(video_path: str, title: str, tags: list) -> str:
     body = {
         "snippet": {
             "title": title,
-            "description": "Google AI & GitHub Actions 자동 생성 영상",
+            "description": "Google AI & GitHub Actions 자동 생성 영상\n\n#개발자 #기술트렌드 #shorts",
             "tags": tags,
             "categoryId": "28"
         },
@@ -127,8 +185,10 @@ def upload_to_youtube(video_path: str, title: str, tags: list) -> str:
 
 async def main():
     topic_item = pick_next_topic()
+    font_path = find_korean_font()
 
     with tempfile.TemporaryDirectory() as tmpdir:
+        bg_path = os.path.join(tmpdir, "background.png")
         audio_path = os.path.join(tmpdir, "voice.mp3")
         video_path = os.path.join(tmpdir, "final_output.mp4")
 
@@ -139,10 +199,13 @@ async def main():
         print("2. TTS 음성 합성 중...")
         await generate_tts(data["script"], audio_path)
 
-        print("3. 영상 합성 중...")
-        create_video("dummy.png", audio_path, video_path)
+        print("3. 배경 이미지 생성 중...")
+        make_background(data["title"], topic_item["id"], font_path).save(bg_path)
 
-        print("4. 유튜브 업로드 중...")
+        print("4. 영상 합성 중...")
+        create_video(bg_path, audio_path, video_path)
+
+        print("5. 유튜브 업로드 중...")
         video_id = upload_to_youtube(video_path, data["title"], data["tags"])
 
         append_log({
