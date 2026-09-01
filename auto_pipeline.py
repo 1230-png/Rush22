@@ -45,7 +45,7 @@ def create_video(image_path: str, audio_path: str, output_path: str):
     
     txt_clip = TextClip(
         text="자동 생성된 유튜브 쇼츠",
-        font="Arial",
+        font="/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
         font_size=50,
         color="white",
         bg_color="black",
