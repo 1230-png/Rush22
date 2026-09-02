@@ -49,18 +49,16 @@ def synthetic_words(text: str) -> list[Word]:
 
 
 async def get_words(text: str, out: Path) -> tuple[list[Word], bool]:
-    import edge_tts
-
-    from auto_pipeline import VOICE, VOICE_RATE
+    from auto_pipeline import _communicate
 
     try:
-        communicate = edge_tts.Communicate(text, VOICE, rate=VOICE_RATE)
+        communicate = _communicate(text)
         audio = bytearray()
         words: list[Word] = []
         async for chunk in communicate.stream():
             if chunk["type"] == "audio":
                 audio.extend(chunk["data"])
-            elif chunk["type"] == "WordBoundary":
+            elif chunk["type"] in ("WordBoundary", "SentenceBoundary"):
                 start = chunk["offset"] / 10_000_000
                 words.append(Word(chunk["text"], start, start + chunk["duration"] / 10_000_000))
         if audio and words:

@@ -67,6 +67,11 @@ MODEL = "gemini-3.6-flash"
 # the limit so a runaway script can never publish as a regular video.
 MAX_DURATION = 58.0
 
+# Gemini overshoots the length it is asked for. The first run came back at
+# 52s against a 45s request, uncomfortably close to the cap, so the script
+# is trimmed to a sentence boundary before it ever reaches the renderer.
+SCRIPT_CHAR_LIMIT = 420
+
 HOOK_SECONDS = 1.6
 
 
@@ -162,7 +167,7 @@ def generate_script(client, topic: str) -> dict:
 {topic}
 
 ## 대본 규칙
-- 전체 낭독 시간 35~45초 (한국어 약 380~460자)
+- 공백 포함 **300~370자**. 이 범위를 넘기지 말 것 (낭독 시 약 35~43초)
 - 구조: 후킹 질문 → 핵심 원리 설명 → 실무에서 뭐가 달라지는지
 - 첫 문장은 반드시 질문이나 반전으로 시작 (스크롤을 멈추게 할 것)
 - 구체적인 수치, 동작 원리, 실제 사례를 넣을 것
@@ -190,7 +195,32 @@ def generate_script(client, topic: str) -> dict:
     data.setdefault("topic_label", "개발 트렌드")
     tags = [t for t in data.get("tags", []) if isinstance(t, str) and t.strip()]
     data["tags"] = (tags or ["개발자", "프로그래밍", "기술트렌드"])[:12]
+    data["script"] = trim_to_sentence(data["script"], SCRIPT_CHAR_LIMIT)
     return data
+
+
+def trim_to_sentence(script: str, limit: int) -> str:
+    """Cut an overlong script back to its last complete sentence.
+
+    The renderer also caps duration, but that cap lands mid-word on the
+    audio. Trimming here instead means an overlong script ends on a finished
+    thought rather than being sliced off in the middle of one.
+    """
+    script = script.strip()
+    if len(script) <= limit:
+        return script
+
+    head = script[:limit]
+    cut = max(head.rfind(c) for c in ".!?")
+    if cut < limit * 0.5:
+        # No sentence break in a usable place -- keep the whole thing and let
+        # the duration cap handle it rather than ending mid-clause here.
+        print(f"[script] {len(script)}자, 문장 경계를 못 찾아 그대로 진행")
+        return script
+
+    trimmed = head[: cut + 1]
+    print(f"[script] {len(script)}자 → {len(trimmed)}자로 문장 단위 절단")
+    return trimmed
 
 
 # --------------------------------------------------------------------------
@@ -198,40 +228,61 @@ def generate_script(client, topic: str) -> dict:
 # --------------------------------------------------------------------------
 
 
+def _communicate(text: str):
+    """Build a Communicate that reports per-word timings.
+
+    edge-tts 7.x defaults `boundary` to "SentenceBoundary", so asking for
+    word timings is opt-in -- without this the stream carries no
+    WordBoundary events at all and captions silently degrade to even
+    spacing. Older releases have no such parameter and emit word events
+    unconditionally, hence the TypeError path.
+    """
+    try:
+        return edge_tts.Communicate(
+            text, VOICE, rate=VOICE_RATE, boundary="WordBoundary"
+        )
+    except TypeError:
+        return edge_tts.Communicate(text, VOICE, rate=VOICE_RATE)
+
+
 async def synthesize(text: str, out_path: Path) -> list[Word]:
     """Render narration and capture per-word timings.
 
-    edge-tts emits WordBoundary events alongside the audio stream; those
-    offsets are what make word-synced captions possible without a forced
-    aligner. Offsets arrive in 100-nanosecond ticks.
+    edge-tts emits boundary events alongside the audio stream; those offsets
+    are what make word-synced captions possible without a forced aligner.
+    Offsets arrive in 100-nanosecond ticks.
     """
-    communicate = edge_tts.Communicate(text, VOICE, rate=VOICE_RATE)
     audio = bytearray()
     words: list[Word] = []
+    sentences: list[Word] = []
 
-    async for chunk in communicate.stream():
-        if chunk["type"] == "audio":
+    async for chunk in _communicate(text).stream():
+        kind = chunk["type"]
+        if kind == "audio":
             audio.extend(chunk["data"])
-        elif chunk["type"] == "WordBoundary":
+        elif kind in ("WordBoundary", "SentenceBoundary"):
             start = chunk["offset"] / 10_000_000
-            duration = chunk["duration"] / 10_000_000
-            words.append(Word(chunk["text"], start, start + duration))
+            span = Word(chunk["text"], start, start + chunk["duration"] / 10_000_000)
+            (words if kind == "WordBoundary" else sentences).append(span)
 
     if not audio:
         raise RuntimeError("edge-tts가 오디오를 반환하지 않았습니다")
 
     out_path.write_bytes(bytes(audio))
 
-    # WordBoundary events are the only thing standing between us and
-    # unsynced captions, and they come from a Microsoft endpoint we do not
-    # control. If the event shape ever changes, fall back to even spacing
-    # rather than failing the run -- slightly-off captions beat a dark
-    # channel that nobody is watching for a week.
-    if not words:
-        print("[tts] 단어 타이밍 없음 — 균등 분배로 대체")
-        words = estimate_words(text, _audio_duration(out_path))
+    if words:
+        return words
 
-    return words
+    # Two fallbacks, both aimed at the same thing: never let a change on
+    # Microsoft's side take the channel dark. Sentence spans still anchor
+    # captions to real audio, so they are much closer than spreading words
+    # evenly across the whole clip.
+    if sentences:
+        print("[tts] 단어 타이밍 없음 — 문장 구간 내 분배로 대체")
+        return [w for s in sentences for w in estimate_words(s.text, s.end - s.start, s.start)]
+
+    print("[tts] 경계 이벤트 없음 — 전체 균등 분배로 대체")
+    return estimate_words(text, _audio_duration(out_path))
 
 
 def _audio_duration(path: Path) -> float:
@@ -244,19 +295,20 @@ def _audio_duration(path: Path) -> float:
         clip.close()
 
 
-def estimate_words(text: str, total: float) -> list[Word]:
-    """Even-spaced timings, weighted by token length.
+def estimate_words(text: str, total: float, offset: float = 0.0) -> list[Word]:
+    """Spread tokens across a span, weighted by length.
 
-    Only used when edge-tts gives us audio but no boundaries. Weighting by
-    length keeps long tokens from flashing past at the same rate as short
+    Used when edge-tts gives us audio but no word boundaries -- either
+    across one sentence's measured span, or across the whole clip. Weighting
+    by length keeps long tokens from flashing past at the same rate as short
     ones, which is what makes naive equal spacing look broken.
     """
     tokens = text.split()
-    if not tokens:
+    if not tokens or total <= 0:
         return []
     weights = [len(t) + 1.5 for t in tokens]
     scale = total / sum(weights)
-    words, t = [], 0.0
+    words, t = [], offset
     for token, weight in zip(tokens, weights):
         span = weight * scale
         words.append(Word(token, t, t + span))
