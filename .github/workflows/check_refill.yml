@@ -1,0 +1,25 @@
+name: 주제 보충 경로 점검
+
+# The refill only runs when the bank is nearly empty, weeks out. This lets
+# that path be exercised on demand so a failure surfaces now rather than on
+# the morning the channel would otherwise stop publishing.
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - run: pip install google-genai
+
+      - name: 보충 시험 (파일 미변경)
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python check_refill.py
