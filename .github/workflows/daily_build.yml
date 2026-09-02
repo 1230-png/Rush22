@@ -1,8 +1,10 @@
-name: Google AI YouTube Automation Pipeline
+name: Rush22 Daily Shorts
 
 on:
   schedule:
-    # KST = UTC+9, so 07:00 / 18:00 KST = 22:00 (prev day) / 09:00 UTC
+    # KST = UTC+9, so 07:00 / 18:00 KST = 22:00 (prev day) / 09:00 UTC.
+    # GitHub's scheduler routinely fires 20-60 minutes late under load; that
+    # is expected and not worth chasing.
     - cron: '0 22 * * *'
     - cron: '0 9 * * *'
   workflow_dispatch:
@@ -10,29 +12,35 @@ on:
 permissions:
   contents: write
 
+# Two runs must never overlap. Both would pick the same topic -- the log only
+# updates at the end -- and publish the same video twice.
+concurrency:
+  group: rush22-daily
+  cancel-in-progress: false
+
 jobs:
-  run-pipeline:
+  publish:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+
     steps:
       - name: 체크아웃
         uses: actions/checkout@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
 
       - name: 파이썬 설정
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.11'
 
-      - name: 시스템 의존성(FFmpeg, 한글 폰트) 설치
+      - name: 시스템 의존성 (FFmpeg, 한글 폰트)
         run: |
           sudo apt-get update
           sudo apt-get install -y ffmpeg fonts-noto-cjk
 
       - name: 파이썬 라이브러리 설치
-        run: |
-          pip install google-genai edge-tts moviepy google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client
+        run: pip install -r requirements.txt
 
       - name: 파이프라인 실행
         env:
@@ -40,18 +48,22 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-        run: |
-          python auto_pipeline.py
+        run: python auto_pipeline.py
 
-      - name: 사용 기록 커밋
+      # Runs even when the pipeline failed: the log row explaining *why* is
+      # the only record of a 07:00 failure nobody was awake for. topic_bank
+      # is committed alongside it because a refill that never gets pushed is
+      # regenerated from scratch on the next run.
+      - name: 기록 커밋
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add used_log.csv
+          git add used_log.csv topic_bank.json
           if git diff --cached --quiet; then
-            echo "No log changes to commit."
+            echo "커밋할 변경 없음"
           else
-            git commit -m "chore: update used_log.csv [skip ci]"
+            git commit -m "chore: 발행 기록 갱신 [skip ci]"
             git pull --rebase origin "${GITHUB_REF_NAME}"
             git push
           fi

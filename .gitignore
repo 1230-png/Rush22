@@ -1,0 +1,5 @@
+selftest_out/
+__pycache__/
+*.pyc
+*.mp4
+*.mp3

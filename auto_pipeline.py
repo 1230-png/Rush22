@@ -1,221 +1,520 @@
+"""Rush22 — daily Shorts pipeline.
+
+Runs unattended from GitHub Actions twice a day. Every external call here
+(Gemini, edge-tts, YouTube) can fail transiently, and a failure at 07:00 KST
+has nobody watching it, so each one retries and the run records what
+happened either way.
+
+The ordering matters: the topic is only marked used once YouTube hands back
+a video id. A run that dies mid-render leaves the topic available for the
+next one instead of silently burning it.
+"""
+
+from __future__ import annotations
+
 import asyncio
 import csv
 import datetime
-import os
 import json
+import os
+import re
+import sys
 import tempfile
-import textwrap
+import time
+import traceback
 from pathlib import Path
 
-from google import genai
-from google.genai import types
 import edge_tts
-from PIL import Image, ImageDraw, ImageFont
-from moviepy import ImageClip, AudioFileClip, CompositeVideoClip
+from google import genai
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
+from moviepy import AudioFileClip, CompositeVideoClip, ImageClip
+
+import topics
+from render import (
+    CAPTION_TOP,
+    HEIGHT,
+    WIDTH,
+    Word,
+    find_korean_font,
+    make_background,
+    make_hook_card,
+    render_caption_frames,
+)
 
 ROOT = Path(__file__).resolve().parent
-TOPIC_BANK = ROOT / "topic_bank.json"
 USED_LOG = ROOT / "used_log.csv"
 
-WIDTH, HEIGHT = 1080, 1920
-
-# Tech/navy gradient, distinct per topic so videos aren't visually identical.
-PALETTES = [
-    ((18, 38, 68), (10, 58, 56)),    # navy -> teal
-    ((28, 24, 58), (12, 46, 58)),    # indigo -> teal
-    ((20, 30, 46), (46, 22, 58)),    # slate -> violet
+LOG_FIELDS = [
+    "date",
+    "topic_id",
+    "topic",
+    "title",
+    "youtube_video_id",
+    "status",
+    "duration_sec",
+    "note",
 ]
 
-FONT_CANDIDATES = [
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-    "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc",
-    "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
-    "C:/Windows/Fonts/malgunbd.ttf",
-    "C:/Windows/Fonts/malgun.ttf",
-]
+VOICE = os.environ.get("RUSH_VOICE", "ko-KR-SunHiNeural")
+VOICE_RATE = os.environ.get("RUSH_VOICE_RATE", "+8%")
+
+MODEL = "gemini-3.6-flash"
+
+# YouTube keeps anything over 3 minutes out of the Shorts feed, but the feed
+# rewards far shorter than that. We aim for 35-45s and hard-stop well under
+# the limit so a runaway script can never publish as a regular video.
+MAX_DURATION = 58.0
+
+HOOK_SECONDS = 1.6
 
 
-def find_korean_font() -> str:
-    for path in FONT_CANDIDATES:
-        if os.path.exists(path):
-            return path
-    raise RuntimeError("No Korean-capable font found; install fonts-noto-cjk")
+# --------------------------------------------------------------------------
+# helpers
+# --------------------------------------------------------------------------
 
 
-def pick_palette(seed: str):
-    idx = sum(ord(c) for c in seed) % len(PALETTES)
-    return PALETTES[idx]
+def retry(times: int = 3, delay: float = 4.0):
+    """Retry with linear backoff.
+
+    Deliberately not exponential: the failures that actually show up here are
+    brief edge-tts blips and Gemini rate limits, both of which clear in
+    seconds. Long backoffs just push the job toward the runner timeout.
+    """
+
+    def decorator(fn):
+        def wrapper(*args, **kwargs):
+            last = None
+            for attempt in range(1, times + 1):
+                try:
+                    return fn(*args, **kwargs)
+                except Exception as exc:  # noqa: BLE001
+                    last = exc
+                    print(f"[retry] {fn.__name__} {attempt}/{times} 실패: {exc}")
+                    if attempt < times:
+                        time.sleep(delay * attempt)
+            raise last
+
+        return wrapper
+
+    return decorator
 
 
-def draw_centered(draw, text, font, y, fill, wrap_width, canvas_width=WIDTH, line_gap=16):
-    lines = textwrap.wrap(text, width=wrap_width) or [text]
-    for line in lines:
-        bbox = draw.textbbox((0, 0), line, font=font)
-        w = bbox[2] - bbox[0]
-        h = bbox[3] - bbox[1]
-        draw.text(((canvas_width - w) / 2, y), line, font=font, fill=fill)
-        y += h + line_gap
-    return y
-
-
-def make_background(title: str, topic_id: str, font_path: str) -> Image.Image:
-    top_color, bottom_color = pick_palette(topic_id)
-    img = Image.new("RGB", (WIDTH, HEIGHT), top_color)
-    draw = ImageDraw.Draw(img)
-    for y in range(HEIGHT):
-        t = y / HEIGHT
-        r = int(top_color[0] + (bottom_color[0] - top_color[0]) * t)
-        g = int(top_color[1] + (bottom_color[1] - top_color[1]) * t)
-        b = int(top_color[2] + (bottom_color[2] - top_color[2]) * t)
-        draw.line([(0, y), (WIDTH, y)], fill=(r, g, b))
-
-    label_font = ImageFont.truetype(font_path, 44)
-    title_font = ImageFont.truetype(font_path, 66)
-    brand_font = ImageFont.truetype(font_path, 34)
-
-    y = 700
-    y = draw_centered(draw, "오늘의 기술 트렌드", label_font, y, (150, 220, 210), wrap_width=20)
-    y += 50
-    draw_centered(draw, title, title_font, y, (255, 255, 255), wrap_width=13)
-
-    brand = "Rush22 · 개발자 기술 트렌드"
-    bbox = draw.textbbox((0, 0), brand, font=brand_font)
-    bx = (WIDTH - (bbox[2] - bbox[0])) / 2
-    draw.text((bx, HEIGHT - 140), brand, font=brand_font, fill=(255, 255, 255))
-    return img
-
-
-def load_used_ids() -> set:
-    if not USED_LOG.exists():
-        return set()
-    with open(USED_LOG, newline="", encoding="utf-8") as f:
-        return {row["topic_id"] for row in csv.DictReader(f)}
-
-
-def pick_next_topic() -> dict:
-    bank = json.loads(TOPIC_BANK.read_text(encoding="utf-8"))
-    used = load_used_ids()
-    for item in bank:
-        if item["id"] not in used:
-            return item
-    # Full cycle done — start reusing from the top rather than stalling forever.
-    return bank[0]
+def strip_fence(text: str) -> str:
+    text = text.strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```(?:json)?\s*", "", text)
+        text = re.sub(r"\s*```$", "", text)
+    return text.strip()
 
 
 def append_log(row: dict) -> None:
-    is_new = not USED_LOG.exists()
+    is_new = not USED_LOG.exists() or USED_LOG.stat().st_size == 0
     with open(USED_LOG, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=list(row.keys()))
+        writer = csv.DictWriter(f, fieldnames=LOG_FIELDS, extrasaction="ignore")
         if is_new:
             writer.writeheader()
         writer.writerow(row)
 
 
-async def generate_script(topic: str):
-    client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-    prompt = f"""
-    주제: {topic}
-    조건: 유튜브 쇼츠용으로 흥미롭고 간결하게 작성.
-    반드시 아래 JSON 형식으로만 응답할 것 (마크다운 백틱 제외):
-    {{
-      "title": "영상 제목 (15자 내외, 화면에 표시될 짧은 제목)",
-      "script": "음성 합성용 대본 텍스트",
-      "tags": ["태그1", "태그2"]
-    }}
+def migrate_log() -> None:
+    """Bring the log up to the current column set.
+
+    The original log had no status/duration/note columns. Rewriting it once
+    stops DictWriter from dropping those fields and keeps the old rows
+    readable by the same analysis.
     """
-    response = client.models.generate_content(
-        model="gemini-3.6-flash",
-        contents=prompt,
+    if not USED_LOG.exists():
+        return
+    with open(USED_LOG, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    if not rows or set(rows[0].keys()) == set(LOG_FIELDS):
+        return
+    for row in rows:
+        row.setdefault("status", "uploaded" if row.get("youtube_video_id") else "unknown")
+        row.setdefault("duration_sec", "")
+        row.setdefault("note", "")
+    with open(USED_LOG, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=LOG_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(rows)
+    print(f"[log] {len(rows)}행을 새 스키마로 이관")
+
+
+# --------------------------------------------------------------------------
+# script
+# --------------------------------------------------------------------------
+
+
+@retry(times=3)
+def generate_script(client, topic: str) -> dict:
+    """Write the narration.
+
+    The prompt asks for a hook/body/payoff split rather than a blob of prose,
+    because that structure is what holds a Short together: a question in the
+    first second, one concrete mechanism in the middle, and a closing line
+    worth rewatching.
+    """
+    prompt = f"""당신은 한국 개발자 대상 유튜브 쇼츠 작가입니다.
+
+## 주제
+{topic}
+
+## 대본 규칙
+- 전체 낭독 시간 35~45초 (한국어 약 380~460자)
+- 구조: 후킹 질문 → 핵심 원리 설명 → 실무에서 뭐가 달라지는지
+- 첫 문장은 반드시 질문이나 반전으로 시작 (스크롤을 멈추게 할 것)
+- 구체적인 수치, 동작 원리, 실제 사례를 넣을 것
+- "여러분", "오늘은 ~에 대해 알아보겠습니다" 같은 상투적 도입 금지
+- 광고성 표현, 특정 제품 추천 금지
+- 마지막 문장은 요약이 아니라 통찰 한 줄
+
+## 출력 (JSON만, 백틱 금지)
+{{
+  "hook": "첫 화면에 크게 박힐 8~14자 문구",
+  "title": "유튜브 제목 25~45자, 검색 키워드를 앞에 배치",
+  "topic_label": "화면 상단 칩에 들어갈 8~14자 분야명",
+  "script": "실제 낭독될 전체 대본",
+  "summary": "설명란 첫 줄에 들어갈 한 문장 요약",
+  "tags": ["검색 태그", "8~12개", "한글과 영문 혼합"]
+}}
+"""
+    response = client.models.generate_content(model=MODEL, contents=prompt)
+    data = json.loads(strip_fence(response.text))
+
+    for key in ("hook", "title", "script", "summary"):
+        if not data.get(key):
+            raise ValueError(f"대본 필드 누락: {key}")
+
+    data.setdefault("topic_label", "개발 트렌드")
+    tags = [t for t in data.get("tags", []) if isinstance(t, str) and t.strip()]
+    data["tags"] = (tags or ["개발자", "프로그래밍", "기술트렌드"])[:12]
+    return data
+
+
+# --------------------------------------------------------------------------
+# narration
+# --------------------------------------------------------------------------
+
+
+async def synthesize(text: str, out_path: Path) -> list[Word]:
+    """Render narration and capture per-word timings.
+
+    edge-tts emits WordBoundary events alongside the audio stream; those
+    offsets are what make word-synced captions possible without a forced
+    aligner. Offsets arrive in 100-nanosecond ticks.
+    """
+    communicate = edge_tts.Communicate(text, VOICE, rate=VOICE_RATE)
+    audio = bytearray()
+    words: list[Word] = []
+
+    async for chunk in communicate.stream():
+        if chunk["type"] == "audio":
+            audio.extend(chunk["data"])
+        elif chunk["type"] == "WordBoundary":
+            start = chunk["offset"] / 10_000_000
+            duration = chunk["duration"] / 10_000_000
+            words.append(Word(chunk["text"], start, start + duration))
+
+    if not audio:
+        raise RuntimeError("edge-tts가 오디오를 반환하지 않았습니다")
+
+    out_path.write_bytes(bytes(audio))
+
+    # WordBoundary events are the only thing standing between us and
+    # unsynced captions, and they come from a Microsoft endpoint we do not
+    # control. If the event shape ever changes, fall back to even spacing
+    # rather than failing the run -- slightly-off captions beat a dark
+    # channel that nobody is watching for a week.
+    if not words:
+        print("[tts] 단어 타이밍 없음 — 균등 분배로 대체")
+        words = estimate_words(text, _audio_duration(out_path))
+
+    return words
+
+
+def _audio_duration(path: Path) -> float:
+    from moviepy import AudioFileClip
+
+    clip = AudioFileClip(str(path))
+    try:
+        return clip.duration
+    finally:
+        clip.close()
+
+
+def estimate_words(text: str, total: float) -> list[Word]:
+    """Even-spaced timings, weighted by token length.
+
+    Only used when edge-tts gives us audio but no boundaries. Weighting by
+    length keeps long tokens from flashing past at the same rate as short
+    ones, which is what makes naive equal spacing look broken.
+    """
+    tokens = text.split()
+    if not tokens:
+        return []
+    weights = [len(t) + 1.5 for t in tokens]
+    scale = total / sum(weights)
+    words, t = [], 0.0
+    for token, weight in zip(tokens, weights):
+        span = weight * scale
+        words.append(Word(token, t, t + span))
+        t += span
+    return words
+
+
+async def synthesize_with_retry(text: str, out_path: Path) -> list[Word]:
+    last = None
+    for attempt in range(1, 4):
+        try:
+            return await synthesize(text, out_path)
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            print(f"[retry] TTS {attempt}/3 실패: {exc}")
+            if attempt < 3:
+                await asyncio.sleep(4 * attempt)
+    raise last
+
+
+# --------------------------------------------------------------------------
+# video
+# --------------------------------------------------------------------------
+
+
+def build_video(
+    audio_path: Path,
+    words: list[Word],
+    data: dict,
+    seed: str,
+    font_path: str,
+    workdir: Path,
+    out_path: Path,
+) -> float:
+    audio = AudioFileClip(str(audio_path))
+    duration = audio.duration
+    if duration > MAX_DURATION:
+        print(f"[video] 대본이 길어 {MAX_DURATION}초로 절단 (원본 {duration:.1f}s)")
+        audio = audio.subclipped(0, MAX_DURATION)
+        duration = MAX_DURATION
+
+    # The background is rendered oversized and slid across the frame. Panning
+    # a larger still costs far less than a per-frame resize, and at this speed
+    # it reads as a deliberate drift rather than motion for its own sake.
+    bg_path = workdir / "bg.png"
+    make_background(data["topic_label"], data["hook"], seed, font_path).save(bg_path)
+    bg_img = ImageClip(str(bg_path))
+    span_x = bg_img.w - WIDTH
+    span_y = bg_img.h - HEIGHT
+    background = bg_img.with_duration(duration).with_position(
+        lambda t: (
+            -span_x * (0.5 + 0.5 * (t / duration)),
+            -span_y * (0.5 - 0.5 * (t / duration)),
+        )
     )
-    text = response.text.strip()
-    if text.startswith("```json"):
-        text = text[7:-3].strip()
-    elif text.startswith("```"):
-        text = text[3:-3].strip()
-    return json.loads(text)
+
+    layers = [background]
+
+    # Opening card, held just long enough to read before the captions take
+    # over mid-sentence.
+    hook_path = workdir / "hook.png"
+    make_hook_card(data["hook"], seed, font_path).save(hook_path)
+    layers.append(
+        ImageClip(str(hook_path)).with_duration(min(HOOK_SECONDS, duration)).with_start(0)
+    )
+
+    frames = render_caption_frames(words, font_path, seed, workdir / "caps")
+    print(f"[video] 자막 프레임 {len(frames)}개")
+
+    for path, start, end in frames:
+        if start >= duration:
+            break
+        clip_end = min(end, duration)
+        if clip_end - start < 0.04:
+            continue
+        layers.append(
+            ImageClip(str(path))
+            .with_duration(clip_end - start)
+            .with_start(start)
+            .with_position((0, CAPTION_TOP))
+        )
+
+    video = CompositeVideoClip(layers, size=(WIDTH, HEIGHT)).with_audio(audio)
+    video.write_videofile(
+        str(out_path),
+        fps=24,
+        codec="libx264",
+        audio_codec="aac",
+        preset="veryfast",
+        threads=4,
+        logger=None,
+        ffmpeg_params=["-pix_fmt", "yuv420p", "-movflags", "+faststart"],
+    )
+    video.close()
+    audio.close()
+    return duration
 
 
-async def generate_tts(text: str, output_path: str):
-    communicate = edge_tts.Communicate(text, "ko-KR-SunHiNeural")
-    await communicate.save(output_path)
+# --------------------------------------------------------------------------
+# upload
+# --------------------------------------------------------------------------
 
 
-def create_video(image_path: str, audio_path: str, output_path: str):
-    audio_clip = AudioFileClip(audio_path)
-    duration = audio_clip.duration
-    image_clip = ImageClip(image_path).with_duration(duration)
-    video = CompositeVideoClip([image_clip]).with_audio(audio_clip)
-    video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac")
+def build_description(data: dict, topic: str) -> str:
+    """Per-video description.
+
+    The old pipeline sent the same three lines on every upload. Identical
+    metadata across a catalogue is one of the clearest mass-production
+    signals YouTube looks for, and it wastes the strongest on-page search
+    surface a Short has.
+    """
+    tags = [re.sub(r"[^0-9A-Za-z가-힣]", "", t) for t in data["tags"][:6]]
+    hashtags = " ".join(f"#{t}" for t in tags if t)
+    return "\n".join(
+        [
+            data["summary"],
+            "",
+            f"오늘 다룬 주제: {topic}",
+            "",
+            "개발자가 알아두면 실무가 달라지는 기술 이야기를 하루 두 번 올립니다.",
+            "구독해두면 출근길에 하나씩 챙겨볼 수 있습니다.",
+            "",
+            f"{hashtags} #개발자 #Shorts",
+            "",
+            "※ 내레이션과 대본 구성에 생성형 AI를 활용했으며, 주제 선정과 검수는 직접 합니다.",
+        ]
+    )
 
 
-def upload_to_youtube(video_path: str, title: str, tags: list) -> str:
+def build_title(data: dict) -> str:
+    """Title capped to YouTube's 100-character limit with #Shorts preserved."""
+    title = data["title"].strip()
+    suffix = " #Shorts"
+    if len(title) + len(suffix) > 100:
+        title = title[: 100 - len(suffix) - 1].rstrip() + "…"
+    return title + suffix
+
+
+@retry(times=3, delay=6.0)
+def upload(video_path: Path, data: dict, topic: str) -> str:
     creds = Credentials(
         token=None,
-        refresh_token=os.environ.get("YOUTUBE_REFRESH_TOKEN"),
-        client_id=os.environ.get("YOUTUBE_CLIENT_ID"),
-        client_secret=os.environ.get("YOUTUBE_CLIENT_SECRET"),
-        token_uri="https://oauth2.googleapis.com/token"
+        refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
+        client_id=os.environ["YOUTUBE_CLIENT_ID"],
+        client_secret=os.environ["YOUTUBE_CLIENT_SECRET"],
+        token_uri="https://oauth2.googleapis.com/token",
     )
-    youtube = build("youtube", "v3", credentials=creds)
+    youtube = build("youtube", "v3", credentials=creds, cache_discovery=False)
 
     body = {
         "snippet": {
-            "title": title,
-            "description": "Google AI & GitHub Actions 자동 생성 영상\n\n#개발자 #기술트렌드 #shorts",
-            "tags": tags,
-            "categoryId": "28"
+            "title": build_title(data),
+            "description": build_description(data, topic),
+            "tags": data["tags"],
+            "categoryId": "28",
+            "defaultAudioLanguage": "ko",
         },
         "status": {
-            "privacyStatus": "public"
-        }
+            "privacyStatus": "public",
+            "selfDeclaredMadeForKids": False,
+        },
     }
-    media = MediaFileUpload(video_path, chunksize=-1, resumable=True)
+    media = MediaFileUpload(str(video_path), chunksize=-1, resumable=True)
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
 
     response = None
     while response is None:
-        status, response = request.next_chunk()
-    video_id = response.get("id")
-    print(f"업로드 완료! 영상 ID: {video_id}")
-    return video_id
+        _, response = request.next_chunk()
+    return response["id"]
 
 
-async def main():
-    topic_item = pick_next_topic()
+# --------------------------------------------------------------------------
+# main
+# --------------------------------------------------------------------------
+
+
+async def run() -> int:
+    migrate_log()
+    client = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     font_path = find_korean_font()
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        bg_path = os.path.join(tmpdir, "background.png")
-        audio_path = os.path.join(tmpdir, "voice.mp3")
-        video_path = os.path.join(tmpdir, "final_output.mp4")
+    topic_item = topics.pick_next(client)
+    topic = topic_item["topic"]
+    print(f"[1/5] 주제: {topic_item['id']} — {topic}")
 
-        print(f"1. 대본 생성 중... (주제: {topic_item['topic']})")
-        data = await generate_script(topic_item["topic"])
-        print(f"생성된 제목: {data['title']}")
+    today = datetime.date.today().isoformat()
 
-        print("2. TTS 음성 합성 중...")
-        await generate_tts(data["script"], audio_path)
+    def fail(stage: str, exc: Exception) -> int:
+        """Record the failure without consuming the topic.
 
-        print("3. 배경 이미지 생성 중...")
-        make_background(data["title"], topic_item["id"], font_path).save(bg_path)
+        No video id means `topics.load_used_ids` skips this row, so the next
+        run picks the same topic up again instead of losing it.
+        """
+        traceback.print_exc()
+        append_log(
+            {
+                "date": today,
+                "topic_id": topic_item["id"],
+                "topic": topic,
+                "title": "",
+                "youtube_video_id": "",
+                "status": f"failed:{stage}",
+                "duration_sec": "",
+                "note": str(exc)[:200],
+            }
+        )
+        print(f"\n[실패] {stage}: {exc}")
+        return 1
 
-        print("4. 영상 합성 중...")
-        create_video(bg_path, audio_path, video_path)
+    try:
+        data = generate_script(client, topic)
+    except Exception as exc:  # noqa: BLE001
+        return fail("script", exc)
+    print(f"[2/5] 제목: {data['title']}")
 
-        print("5. 유튜브 업로드 중...")
-        video_id = upload_to_youtube(video_path, data["title"], data["tags"])
+    with tempfile.TemporaryDirectory() as tmp:
+        workdir = Path(tmp)
+        audio_path = workdir / "voice.mp3"
+        video_path = workdir / "short.mp4"
 
-        append_log({
-            "date": datetime.date.today().isoformat(),
+        try:
+            words = await synthesize_with_retry(data["script"], audio_path)
+        except Exception as exc:  # noqa: BLE001
+            return fail("tts", exc)
+        print(f"[3/5] 내레이션 {len(words)}단어")
+
+        if not words:
+            return fail("tts", RuntimeError("단어 타이밍이 비어 있습니다"))
+
+        try:
+            duration = build_video(
+                audio_path, words, data, topic_item["id"], font_path, workdir, video_path
+            )
+        except Exception as exc:  # noqa: BLE001
+            return fail("render", exc)
+        size_mb = video_path.stat().st_size / 1_048_576
+        print(f"[4/5] 영상 {duration:.1f}초 / {size_mb:.1f}MB")
+
+        try:
+            video_id = upload(video_path, data, topic)
+        except Exception as exc:  # noqa: BLE001
+            return fail("upload", exc)
+
+    append_log(
+        {
+            "date": today,
             "topic_id": topic_item["id"],
-            "topic": topic_item["topic"],
+            "topic": topic,
             "title": data["title"],
             "youtube_video_id": video_id,
-        })
+            "status": "uploaded",
+            "duration_sec": f"{duration:.1f}",
+            "note": "",
+        }
+    )
+    print(f"[5/5] 완료 — https://youtube.com/shorts/{video_id}")
+    return 0
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(asyncio.run(run()))
