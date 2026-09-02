@@ -4,3 +4,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-01,T003,Rust가 시스템 프로그래밍 언어로 각광받는 진짜 이유,빅테크가 러스트에 미친 이유,IyvQNIjLqa8,uploaded,,
 2026-09-02,T004,Kubernetes 없이도 컨테이너를 운영할 수 있는 경량 대안들,쿠버네티스 없이 컨테이너 운영하기 | K8s 대안 경량 도구 비교,JhxbgQ5xBrw,uploaded,52.1,
 2026-09-02,T005,엣지 컴퓨팅이 클라우드 비용을 줄이는 방법,엣지컴퓨팅 클라우드 비용 절감: 데이터 트래픽 90% 줄이는 개발 팁,3YBKMyjmank,uploaded,46.5,
+2026-09-02,T006,AI 코딩 어시스턴트가 개발자 생산성에 미치는 실제 영향,,,failed:script,,"503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
