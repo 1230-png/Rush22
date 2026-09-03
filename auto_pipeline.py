@@ -187,10 +187,12 @@ def call_model(client, prompt: str) -> str:
                     print(f"[model] {model} 사용 불가 — 다음 모델로")
                     break
                 if "503" in text or "429" in text or "UNAVAILABLE" in text:
-                    wait = 20 * attempt
-                    print(f"[model] {model} 과부하 {attempt}/3 — {wait}초 대기")
                     if attempt < 3:
+                        wait = 20 * attempt
+                        print(f"[model] {model} 과부하 {attempt}/3 — {wait}초 대기")
                         time.sleep(wait)
+                    else:
+                        print(f"[model] {model} 과부하 — 다음 모델로")
                     continue
                 print(f"[model] {model} 오류 {attempt}/3: {exc}")
                 if attempt < 3:
