@@ -13,6 +13,7 @@ from __future__ import annotations
 import csv
 import json
 import re
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
@@ -23,6 +24,63 @@ USED_LOG = ROOT / "used_log.csv"
 # Gemini call would leave the next run with nothing to publish.
 REFILL_THRESHOLD = 12
 REFILL_COUNT = 40
+
+# Above this, two topics are the same subject reworded. Calibrated against
+# the live bank: genuinely different topics that share a title pattern peak
+# at 0.264, while restatements of one topic land at 0.30-0.44. 0.28 sits in
+# that gap.
+#
+# Erring high would let a reworded repeat through; erring low only costs us a
+# usable topic, and the bank has plenty. So the threshold leans strict.
+DUPLICATE_THRESHOLD = 0.28
+
+
+def _normalize(text: str) -> str:
+    return re.sub(r"[^0-9a-z가-힣]", "", text.lower())
+
+
+def _grams(text: str) -> set[str]:
+    """Character bigrams. Korean agglutinates, so word-level comparison misses
+    "GIL이" against "GIL을"; bigrams see through the particles."""
+    n = _normalize(text)
+    return {n[i : i + 2] for i in range(len(n) - 1)} or {n}
+
+
+def _weights(corpus: list[str]) -> dict[str, float]:
+    """Down-weight fragments that appear all over the bank.
+
+    Plain overlap treats "~하는 이유" as evidence two topics match, so a
+    Kubernetes post and a Rust post scored as near-duplicates purely for
+    sharing a title pattern. Weighting by rarity makes the distinctive terms
+    -- GIL, 프롬프트, 파드 -- decide instead.
+    """
+    if not corpus:
+        return {}
+    df = Counter(g for t in corpus for g in _grams(t))
+    n = len(corpus)
+    return {g: 1.0 / (1 + c / n * 10) for g, c in df.items()}
+
+
+def similarity(a: str, b: str, weights: dict[str, float]) -> float:
+    ga, gb = _grams(a), _grams(b)
+    if not (ga | gb):
+        return 0.0
+
+    def w(g: str) -> float:
+        return weights.get(g, 1.0)
+
+    union = sum(w(g) for g in ga | gb)
+    return sum(w(g) for g in ga & gb) / union if union else 0.0
+
+
+def find_duplicate(candidate: str, existing: list[str], weights: dict[str, float]):
+    """The closest existing topic, if it is close enough to count as the same."""
+    best, score = None, 0.0
+    for other in existing:
+        s = similarity(candidate, other, weights)
+        if s > score:
+            best, score = other, s
+    return (best, score) if score >= DUPLICATE_THRESHOLD else (None, score)
 
 
 def load_bank() -> list[dict]:
@@ -105,13 +163,25 @@ JSON 배열만 출력. 마크다운 백틱 금지.
     items = json.loads(_strip_fence(response.text))
 
     bank = load_bank()
-    seen = {t["topic"] for t in bank} | set(avoid)
-    fresh = []
+    seen = [t["topic"] for t in bank] + list(avoid)
+    weights = _weights(seen or [i.get("topic", "") for i in items])
+
+    fresh: list[str] = []
+    rejected = 0
     for item in items:
         topic = (item.get("topic") or "").strip()
-        if topic and topic not in seen:
-            seen.add(topic)
-            fresh.append(topic)
+        if not topic:
+            continue
+        # Compare against accepted candidates too: one batch can contain two
+        # phrasings of the same idea.
+        dupe, _ = find_duplicate(topic, seen + fresh, weights)
+        if dupe:
+            rejected += 1
+            continue
+        fresh.append(topic)
+
+    if rejected:
+        print(f"[topics] 기존 주제와 겹쳐 {rejected}개 제외")
     return fresh
 
 
@@ -151,7 +221,13 @@ def refill_if_needed(client) -> bool:
 
 
 def pick_next(client) -> dict:
-    """The next topic to publish, refilling the bank first if it is low."""
+    """The next topic to publish, refilling the bank first if it is low.
+
+    Second line of defence against repeats. The refill filter keeps reworded
+    topics out of the bank, but topics added before that filter existed --
+    or by hand -- never passed through it. This catches them at the last
+    moment, when the comparison against what actually aired is exact.
+    """
     refill_if_needed(client)
     remaining = unused(load_bank())
     if not remaining:
@@ -159,4 +235,20 @@ def pick_next(client) -> dict:
             "발행할 주제가 없고 보충도 실패했습니다. "
             "GEMINI_API_KEY와 topic_bank.json을 확인하세요."
         )
+
+    published = load_used_topics()
+    if published:
+        weights = _weights(published + [t["topic"] for t in remaining])
+        for item in remaining:
+            dupe, score = find_duplicate(item["topic"], published, weights)
+            if not dupe:
+                return item
+            print(
+                f"[topics] {item['id']} 건너뜀 — 발행분과 유사 {score:.2f}: {dupe[:34]}"
+            )
+
+        # Everything left resembles something already out. Publishing a near
+        # repeat beats going dark, so take the first and say so loudly.
+        print("[topics] 경고: 남은 주제가 모두 기존 발행분과 유사합니다")
+
     return remaining[0]

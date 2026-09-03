@@ -5,7 +5,7 @@ name: 발행 상태 점검
 # rather than waiting to be discovered.
 on:
   schedule:
-    - cron: '0 3 * * *'   # 12:00 KST, after both publish slots
+    - cron: '0 6 * * *'   # 15:00 KST, clear of every publish slot
   workflow_dispatch:
 
 permissions:

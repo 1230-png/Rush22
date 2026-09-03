@@ -538,8 +538,33 @@ def build_title(data: dict) -> str:
     return title + suffix
 
 
-@retry(times=3, delay=6.0)
+class QuotaExceeded(RuntimeError):
+    """The day's YouTube API allowance is gone. Retrying only burns more."""
+
+
 def upload(video_path: Path, data: dict, topic: str) -> str:
+    """Publish, retrying transient failures but never a quota refusal.
+
+    videos.insert costs 1,600 of the 10,000 daily units. At four videos a day
+    a blind retry loop can spend the whole allowance on one stuck upload and
+    take the rest of the day's slots down with it, so a quota error aborts on
+    the spot and is recorded for the health check to surface.
+    """
+    last: Exception | None = None
+    for attempt in range(1, 3):
+        try:
+            return _upload_once(video_path, data, topic)
+        except QuotaExceeded:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            last = exc
+            print(f"[retry] upload {attempt}/2 실패: {exc}")
+            if attempt < 2:
+                time.sleep(8)
+    raise last
+
+
+def _upload_once(video_path: Path, data: dict, topic: str) -> str:
     creds = Credentials(
         token=None,
         refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
@@ -565,9 +590,15 @@ def upload(video_path: Path, data: dict, topic: str) -> str:
     media = MediaFileUpload(str(video_path), chunksize=-1, resumable=True)
     request = youtube.videos().insert(part="snippet,status", body=body, media_body=media)
 
-    response = None
-    while response is None:
-        _, response = request.next_chunk()
+    try:
+        response = None
+        while response is None:
+            _, response = request.next_chunk()
+    except Exception as exc:  # noqa: BLE001
+        text = str(exc)
+        if "quotaExceeded" in text or "uploadLimitExceeded" in text:
+            raise QuotaExceeded(text) from exc
+        raise
     return response["id"]
 
 
