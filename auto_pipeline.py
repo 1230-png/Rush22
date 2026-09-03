@@ -78,10 +78,11 @@ MODELS = [
 # the limit so a runaway script can never publish as a regular video.
 MAX_DURATION = 58.0
 
-# Gemini overshoots the length it is asked for. The first run came back at
-# 52s against a 45s request, uncomfortably close to the cap, so the script
-# is trimmed to a sentence boundary before it ever reaches the renderer.
-SCRIPT_CHAR_LIMIT = 420
+# Gemini does not hold to a character count: published runs came back at
+# 44.6s, 46.5s, 52.1s and 55.9s against the same budget. 360 puts the median
+# near 45s, and fit_beats enforces the ceiling so the spread cannot reach
+# MAX_DURATION -- where the cut lands mid-word.
+SCRIPT_CHAR_LIMIT = 360
 
 HOOK_SECONDS = 1.6
 
@@ -222,7 +223,9 @@ def generate_script(client, topic: str, published: int) -> dict:
 
     # Narration is the beats in order. Keeping them separate through to here
     # is what lets the renderer know when the payoff starts.
-    data["beat_texts"] = [beats[name].strip() for name, _, _ in playbook.BEATS]
+    data["beat_texts"] = fit_beats(
+        [beats[name].strip() for name, _, _ in playbook.BEATS], SCRIPT_CHAR_LIMIT
+    )
     data["script"] = " ".join(data["beat_texts"])
     data["format"] = fmt["id"]
     data.setdefault("topic_label", fmt["chip"])
@@ -234,10 +237,43 @@ def generate_script(client, topic: str, published: int) -> dict:
     tags = [t for t in data.get("tags", []) if isinstance(t, str) and t.strip()]
     data["tags"] = (tags or ["개발자", "프로그래밍", "기술트렌드"])[:12]
 
-    if len(data["script"]) > SCRIPT_CHAR_LIMIT * 1.25:
-        print(f"[script] {len(data['script'])}자 — 상한 초과, 길이 캡에 맡김")
-
     return data
+
+
+def fit_beats(beat_texts: list[str], limit: int) -> list[str]:
+    """Trim the narration to budget, cutting inside the payoff beat.
+
+    The payoff is the only beat with several sentences, so it is the only
+    place a cut lands cleanly. The hook is the reason anyone stayed and the
+    closing line is the takeaway, so neither is touched -- an overlong script
+    loses some of its middle rather than its point.
+
+    Falls through untouched when there is no sensible sentence break, leaving
+    MAX_DURATION as the backstop.
+    """
+    total = sum(len(t) for t in beat_texts) + max(len(beat_texts) - 1, 0)
+    if total <= limit:
+        return beat_texts
+
+    names = [name for name, _, _ in playbook.BEATS]
+    idx = names.index("payoff")
+    payoff = beat_texts[idx]
+    target = len(payoff) - (total - limit)
+
+    if target < 60:
+        print(f"[script] {total}자 — 잘라낼 여지가 없어 길이 캡에 맡김")
+        return beat_texts
+
+    cut = max(payoff[:target].rfind(c) for c in ".!?")
+    if cut < target * 0.4:
+        print(f"[script] {total}자 — 문장 경계를 못 찾아 길이 캡에 맡김")
+        return beat_texts
+
+    trimmed = list(beat_texts)
+    trimmed[idx] = payoff[: cut + 1]
+    new_total = sum(len(t) for t in trimmed) + len(trimmed) - 1
+    print(f"[script] {total}자 → {new_total}자 (해소 비트에서 절단)")
+    return trimmed
 
 
 def payoff_word_index(data: dict) -> int:
