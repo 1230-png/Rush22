@@ -7,3 +7,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-02,T006,AI 코딩 어시스턴트가 개발자 생산성에 미치는 실제 영향,,,failed:script,,"503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
 2026-09-02,T006,AI 코딩 어시스턴트가 개발자 생산성에 미치는 실제 영향,AI 코딩 생산성 실제 데이터 검증! 개발자가 겪는 체감 변화 3가지,cqMaYL2bt7w,uploaded,44.6,
 2026-09-03,T007,벡터 데이터베이스가 검색 시스템을 어떻게 바꾸고 있는가,벡터 데이터베이스가 기존 키워드 검색을 완전히 바꾸는 진짜 이유,0ilcopU1ltE,uploaded,55.9,
+2026-09-03,T008,서버리스 아키텍처의 숨겨진 비용 함정,"서버리스 vs 컨테이너, 서버비 폭탄 안 맞으려면 언제 바꿔야 할까?",J-XqgHEB4gg,uploaded,48.4,
