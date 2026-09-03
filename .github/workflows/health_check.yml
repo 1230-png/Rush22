@@ -1,0 +1,71 @@
+name: 발행 상태 점검
+
+# The channel is meant to run for months without anyone watching it. This is
+# what notices when it stops: a stalled pipeline opens an issue on its own
+# rather than waiting to be discovered.
+on:
+  schedule:
+    - cron: '0 3 * * *'   # 12:00 KST, after both publish slots
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: 상태 확인
+        id: check
+        run: |
+          set +e
+          OUT=$(python health_check.py 2>&1)
+          CODE=$?
+          echo "$OUT"
+          {
+            echo "report<<REPORT_EOF"
+            echo "$OUT"
+            echo "REPORT_EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "code=$CODE" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      # One issue, reopened and updated rather than a new one per day --
+      # a daily cron that files a fresh issue would bury the repo in
+      # duplicates within a week of an outage.
+      - name: 문제 시 이슈 열기
+        if: steps.check.outputs.code != '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPORT: ${{ steps.check.outputs.report }}
+        run: |
+          TITLE="자동 발행이 멈췄습니다"
+          NUM=$(gh issue list --state all --search "$TITLE in:title" --json number,title \
+                --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          BODY=$(printf '자동 점검이 이상을 감지했습니다.\n\n```\n%s\n```\n\n확인 순서\n1. Actions → "Rush22 Daily Shorts" 최근 실행 로그\n2. `used_log.csv`의 `status` / `note` 컬럼\n3. `failed:upload` + invalid_grant → OAuth 동의 화면이 테스트로 돌아갔는지 확인, 토큰 재발급 필요\n4. `failed:script` + 404 → Gemini 모델 은퇴. `RUSH_MODEL` 시크릿으로 교체 가능\n\n실행: %s' "$REPORT" "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID")
+          if [ -n "$NUM" ]; then
+            gh issue reopen "$NUM" 2>/dev/null || true
+            gh issue comment "$NUM" --body "$BODY"
+          else
+            gh issue create --title "$TITLE" --body "$BODY"
+          fi
+
+      - name: 정상이면 이슈 닫기
+        if: steps.check.outputs.code == '0'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TITLE="자동 발행이 멈췄습니다"
+          NUM=$(gh issue list --state open --search "$TITLE in:title" --json number,title \
+                --jq ".[] | select(.title == \"$TITLE\") | .number" | head -1)
+          if [ -n "$NUM" ]; then
+            gh issue close "$NUM" --comment "발행이 재개되어 자동으로 닫습니다."
+          fi

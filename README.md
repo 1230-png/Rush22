@@ -9,13 +9,19 @@
 ## 구조
 
 ```
-auto_pipeline.py   진입점: 주제 선택 → 대본 → 음성 → 영상 → 업로드 → 기록
-render.py          배경 플레이트와 단어 싱크 자막 렌더링
+playbook.py        콘텐츠 설계 6축 — 구조·포맷·가치·훅 규칙이 전부 여기
+auto_pipeline.py   진입점: 주제 → 대본 → 음성 → 영상 → 업로드 → 기록
+render.py          배경 플레이트, 단어 싱크 자막, 진행 바
 topics.py          주제 뱅크 관리 (소진 시 자동 보충)
+health_check.py    발행이 멈췄는지 판정 (멈추면 이슈 자동 생성)
 selftest.py        Gemini·업로드 없이 렌더러만 검증
+check_refill.py    보충 경로만 시험 (파일 미변경)
 topic_bank.json    주제 목록 — 자동으로 늘어남
 used_log.csv       발행 기록 (Actions가 자동 커밋)
 ```
+
+채널 방향을 바꾸려면 `playbook.py`만 고치면 됩니다. 나머지 코드는 주제도
+포맷도 모릅니다.
 
 발행 주기는 [`.github/workflows/daily_build.yml`](.github/workflows/daily_build.yml)에 있습니다.
 

@@ -168,19 +168,40 @@ def _add_texture(img: Image.Image, theme: dict, seed: int) -> None:
     img.paste(ImageChops.add(img, glow))
 
 
-def make_background(topic_label: str, hook: str, seed: str, font_path: str) -> Image.Image:
+def make_background(
+    topic_label: str,
+    top_line: str,
+    seed: str,
+    font_path: str,
+    variant: int = 0,
+) -> Image.Image:
     """Background plate, rendered oversized so the video can drift across it.
 
-    Carries everything that stays on screen for the whole video: the topic
-    chip, the hook line, and the brand mark. Baking them into the plate means
+    Carries everything that holds still for a stretch of the video: the topic
+    chip, the top line, and the brand mark. Baking them into the plate means
     they drift with the background instead of sitting frozen on top of it,
-    and it keeps the composite down to one moving layer plus captions.
+    and it keeps the composite to one moving layer plus captions.
+
+    `variant` produces the second plate. The video swaps to it when the
+    payoff starts, so the frame visibly changes at the moment the content
+    starts paying out rather than holding one image for forty seconds.
     """
     theme = pick_theme(seed)
+    if variant:
+        # Invert the gradient and swap accent roles: clearly a different
+        # frame, still obviously the same video.
+        theme = {
+            **theme,
+            "top": theme["bottom"],
+            "bottom": theme["top"],
+            "accent": theme["chip"],
+            "chip": theme["accent"],
+        }
+
     over_w, over_h = int(WIDTH * 1.14), int(HEIGHT * 1.14)
 
     img = _gradient(theme, over_h, over_w)
-    _add_texture(img, theme, sum(ord(c) for c in seed))
+    _add_texture(img, theme, sum(ord(c) for c in seed) + variant * 31)
 
     draw = ImageDraw.Draw(img)
     off_x = (over_w - WIDTH) // 2
@@ -204,7 +225,7 @@ def make_background(topic_label: str, hook: str, seed: str, font_path: str) -> I
     # Hook line, held for the whole video. Shorts viewers arrive mid-scroll
     # and mid-sentence; without this they have no idea what the question is.
     hook_font = ImageFont.truetype(font_path, 62)
-    hook_lines = textwrap.wrap(hook, width=14)[:2] or [hook]
+    hook_lines = textwrap.wrap(top_line, width=14)[:2] or [top_line]
     hy = off_y + HOOK_TOP
     for line in hook_lines:
         bb = draw.textbbox((0, 0), line, font=hook_font)
@@ -221,16 +242,9 @@ def make_background(topic_label: str, hook: str, seed: str, font_path: str) -> I
         fill=theme["accent"],
     )
 
-    # Brand mark, kept above SAFE_BOTTOM so the player chrome misses it.
-    brand_font = ImageFont.truetype(font_path, 38)
-    brand = "Rush22"
-    bb = draw.textbbox((0, 0), brand, font=brand_font)
-    draw.text(
-        (off_x + (WIDTH - (bb[2] - bb[0])) / 2, off_y + BRAND_TOP),
-        brand,
-        font=brand_font,
-        fill=(188, 200, 216),
-    )
+    # No brand mark: the Shorts player already shows the channel name and
+    # handle, and a mark baked into the drifting plate collided with the
+    # fixed progress bar once the plate moved.
     return img
 
 
@@ -288,11 +302,34 @@ def group_words(words: list[Word], max_chars: int = 18) -> list[list[Word]]:
     return groups
 
 
+def keyword_parts(keywords: tuple[str, ...]) -> tuple[str, ...]:
+    """Flatten keywords into the individual terms captions can match.
+
+    A keyword like "참조 카운트" is two spoken tokens, so testing the whole
+    phrase against one token never matches -- which silently left every
+    multi-word keyword unhighlighted. Parts shorter than two characters are
+    dropped: they hit far too much.
+    """
+    parts = {p for k in keywords for p in k.split() if len(p) >= 2}
+    return tuple(parts)
+
+
+def is_keyword(token: str, parts: tuple[str, ...]) -> bool:
+    """Whether a spoken token carries one of the video's key terms.
+
+    Substring rather than equality: Korean attaches particles to nouns, so
+    "GIL" arrives as "GIL이" and "캐시" as "캐시를". Matching on equality
+    would leave almost every keyword unhighlighted.
+    """
+    return any(p in token for p in parts)
+
+
 def render_caption(
     phrase: list[Word],
     spoken_upto: int,
     font_path: str,
     theme: dict,
+    keywords: tuple[str, ...] = (),
 ) -> Image.Image:
     """One caption frame: the phrase, with words already spoken lit up.
 
@@ -300,6 +337,7 @@ def render_caption(
     1080x520 strip per word is what keeps a 45-second render at ~120 words
     from turning into a multi-minute encode.
     """
+    parts = keyword_parts(keywords)
     img = Image.new("RGBA", (WIDTH, CAPTION_HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
     font = ImageFont.truetype(font_path, 74)
@@ -326,9 +364,16 @@ def render_caption(
         x = (WIDTH - total) / 2
         for w, idx in line:
             spoken = idx <= spoken_upto
-            fill = theme["accent"] if idx == spoken_upto else (
-                (255, 255, 255) if spoken else (168, 178, 196)
-            )
+            if idx == spoken_upto:
+                fill = theme["accent"]
+            elif spoken and is_keyword(w.text, parts):
+                # Key terms stay lit after they are spoken. A viewer who
+                # joins mid-sentence can still see what the video is about.
+                fill = theme["chip"]
+            elif spoken:
+                fill = (255, 255, 255)
+            else:
+                fill = (168, 178, 196)
             # Hard shadow instead of a blur: it survives YouTube's
             # re-encode, where a soft glow turns to mush.
             draw.text((x + 4, y + 5), w.text, font=font, fill=(0, 0, 0, 210))
@@ -344,6 +389,7 @@ def render_caption_frames(
     font_path: str,
     seed: str,
     out_dir: Path,
+    keywords: tuple[str, ...] = (),
 ) -> list[tuple[Path, float, float]]:
     """Render every caption state to disk.
 
@@ -357,10 +403,48 @@ def render_caption_frames(
     for g_idx, phrase in enumerate(group_words(words)):
         for w_idx, word in enumerate(phrase):
             path = out_dir / f"cap_{g_idx:03d}_{w_idx:02d}.png"
-            render_caption(phrase, w_idx, font_path, theme).save(path)
+            render_caption(phrase, w_idx, font_path, theme, keywords).save(path)
             # Hold the last word of a phrase until the next one starts so the
             # caption never blinks out into an empty band between phrases.
             end = phrase[w_idx + 1].start if w_idx + 1 < len(phrase) else word.end
             frames.append((path, word.start, max(end, word.start + 0.08)))
+
+    return frames
+
+
+def make_progress_frames(
+    duration: float,
+    seed: str,
+    out_dir: Path,
+    steps: int = 48,
+) -> list[tuple[Path, float, float]]:
+    """A thin bar that fills as the video plays.
+
+    Shorts viewers cannot see the scrubber, so there is nothing telling them
+    how much is left; a visible finish line is one of the cheapest ways to
+    hold someone through the payoff. Pre-rendered in steps rather than
+    animated per frame -- at 48 steps over ~45s the growth reads as
+    continuous and costs 48 tiny PNGs instead of a per-frame resize.
+    """
+    theme = pick_theme(seed)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    frames: list[tuple[Path, float, float]] = []
+    span = duration / steps
+    bar_h = 10
+    margin = 90
+
+    for i in range(steps):
+        img = Image.new("RGBA", (WIDTH, bar_h), (0, 0, 0, 0))
+        draw = ImageDraw.Draw(img)
+        draw.rounded_rectangle(
+            [margin, 0, WIDTH - margin, bar_h], radius=bar_h // 2, fill=(255, 255, 255, 40)
+        )
+        filled = margin + (WIDTH - margin * 2) * (i + 1) / steps
+        draw.rounded_rectangle(
+            [margin, 0, filled, bar_h], radius=bar_h // 2, fill=(*theme["accent"], 235)
+        )
+        path = out_dir / f"prog_{i:03d}.png"
+        img.save(path)
+        frames.append((path, i * span, (i + 1) * span))
 
     return frames

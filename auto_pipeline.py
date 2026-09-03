@@ -31,15 +31,18 @@ from googleapiclient.http import MediaFileUpload
 from google.oauth2.credentials import Credentials
 from moviepy import AudioFileClip, CompositeVideoClip, ImageClip
 
+import playbook
 import topics
 from render import (
     CAPTION_TOP,
     HEIGHT,
+    SAFE_BOTTOM,
     WIDTH,
     Word,
     find_korean_font,
     make_background,
     make_hook_card,
+    make_progress_frames,
     render_caption_frames,
 )
 
@@ -60,7 +63,15 @@ LOG_FIELDS = [
 VOICE = os.environ.get("RUSH_VOICE", "ko-KR-SunHiNeural")
 VOICE_RATE = os.environ.get("RUSH_VOICE_RATE", "+8%")
 
-MODEL = "gemini-3.6-flash"
+# Tried in order. Google retires models for new callers without warning --
+# that is exactly how every scheduled run from 8/25 onward died with a 404
+# until someone noticed. A list means a retirement costs one wasted call
+# instead of taking the channel down until a human intervenes.
+MODELS = [
+    os.environ.get("RUSH_MODEL", "gemini-3.6-flash"),
+    "gemini-2.5-flash",
+    "gemini-flash-latest",
+]
 
 # YouTube keeps anything over 3 minutes out of the Shorts feed, but the feed
 # rewards far shorter than that. We aim for 35-45s and hard-stop well under
@@ -152,75 +163,93 @@ def migrate_log() -> None:
 # --------------------------------------------------------------------------
 
 
-@retry(times=3)
-def generate_script(client, topic: str) -> dict:
-    """Write the narration.
+def call_model(client, prompt: str) -> str:
+    """Ask Gemini, walking the model list and retrying overload.
 
-    The prompt asks for a hook/body/payoff split rather than a blob of prose,
-    because that structure is what holds a Short together: a question in the
-    first second, one concrete mechanism in the middle, and a closing line
-    worth rewatching.
+    Two failure shapes, two responses. A 404 means the model is gone for
+    good, so move to the next one immediately. A 503/429 means the model is
+    busy, so wait -- and wait properly: the first 503 we hit in production
+    burned all three attempts in twelve seconds and lost the slot.
     """
-    prompt = f"""당신은 한국 개발자 대상 유튜브 쇼츠 작가입니다.
+    last: Exception | None = None
 
-## 주제
-{topic}
+    for model in MODELS:
+        for attempt in range(1, 4):
+            try:
+                return client.models.generate_content(
+                    model=model, contents=prompt
+                ).text
+            except Exception as exc:  # noqa: BLE001
+                last = exc
+                text = str(exc)
+                if "404" in text or "NOT_FOUND" in text:
+                    print(f"[model] {model} 사용 불가 — 다음 모델로")
+                    break
+                if "503" in text or "429" in text or "UNAVAILABLE" in text:
+                    wait = 20 * attempt
+                    print(f"[model] {model} 과부하 {attempt}/3 — {wait}초 대기")
+                    if attempt < 3:
+                        time.sleep(wait)
+                    continue
+                print(f"[model] {model} 오류 {attempt}/3: {exc}")
+                if attempt < 3:
+                    time.sleep(5 * attempt)
 
-## 대본 규칙
-- 공백 포함 **300~370자**. 이 범위를 넘기지 말 것 (낭독 시 약 35~43초)
-- 구조: 후킹 질문 → 핵심 원리 설명 → 실무에서 뭐가 달라지는지
-- 첫 문장은 반드시 질문이나 반전으로 시작 (스크롤을 멈추게 할 것)
-- 구체적인 수치, 동작 원리, 실제 사례를 넣을 것
-- "여러분", "오늘은 ~에 대해 알아보겠습니다" 같은 상투적 도입 금지
-- 광고성 표현, 특정 제품 추천 금지
-- 마지막 문장은 요약이 아니라 통찰 한 줄
+    raise RuntimeError(f"모든 모델 실패: {last}")
 
-## 출력 (JSON만, 백틱 금지)
-{{
-  "hook": "첫 화면에 크게 박힐 8~14자 문구",
-  "title": "유튜브 제목 25~45자, 검색 키워드를 앞에 배치",
-  "topic_label": "화면 상단 칩에 들어갈 8~14자 분야명",
-  "script": "실제 낭독될 전체 대본",
-  "summary": "설명란 첫 줄에 들어갈 한 문장 요약",
-  "tags": ["검색 태그", "8~12개", "한글과 영문 혼합"]
-}}
-"""
-    response = client.models.generate_content(model=MODEL, contents=prompt)
-    data = json.loads(strip_fence(response.text))
 
-    for key in ("hook", "title", "script", "summary"):
+def generate_script(client, topic: str, published: int) -> dict:
+    """Write one video against the six-axis playbook.
+
+    The format rotates by publish count rather than being chosen per topic,
+    so the catalogue cycles through all six shapes instead of collapsing onto
+    whichever one the model finds easiest.
+    """
+    fmt = playbook.pick_format(published)
+    print(f"[script] 포맷: {fmt['name']} ({fmt['id']})")
+
+    prompt = playbook.build_prompt(topic, fmt, SCRIPT_CHAR_LIMIT)
+    data = json.loads(strip_fence(call_model(client, prompt)))
+
+    for key in ("hook", "title", "summary", "beats"):
         if not data.get(key):
             raise ValueError(f"대본 필드 누락: {key}")
 
-    data.setdefault("topic_label", "개발 트렌드")
+    beats = data["beats"]
+    missing = [name for name, _, _ in playbook.BEATS if not beats.get(name)]
+    if missing:
+        raise ValueError(f"비트 누락: {missing}")
+
+    # Narration is the beats in order. Keeping them separate through to here
+    # is what lets the renderer know when the payoff starts.
+    data["beat_texts"] = [beats[name].strip() for name, _, _ in playbook.BEATS]
+    data["script"] = " ".join(data["beat_texts"])
+    data["format"] = fmt["id"]
+    data.setdefault("topic_label", fmt["chip"])
+    data.setdefault("core", data["hook"])
+
+    keywords = [k for k in data.get("keywords", []) if isinstance(k, str) and k.strip()]
+    data["keywords"] = tuple(k.strip() for k in keywords[:5])
+
     tags = [t for t in data.get("tags", []) if isinstance(t, str) and t.strip()]
     data["tags"] = (tags or ["개발자", "프로그래밍", "기술트렌드"])[:12]
-    data["script"] = trim_to_sentence(data["script"], SCRIPT_CHAR_LIMIT)
+
+    if len(data["script"]) > SCRIPT_CHAR_LIMIT * 1.25:
+        print(f"[script] {len(data['script'])}자 — 상한 초과, 길이 캡에 맡김")
+
     return data
 
 
-def trim_to_sentence(script: str, limit: int) -> str:
-    """Cut an overlong script back to its last complete sentence.
+def payoff_word_index(data: dict) -> int:
+    """Token index where the payoff beat begins.
 
-    The renderer also caps duration, but that cap lands mid-word on the
-    audio. Trimming here instead means an overlong script ends on a finished
-    thought rather than being sliced off in the middle of one.
+    edge-tts splits on whitespace the same way, so counting tokens in the
+    earlier beats locates the switch point in the word timeline without
+    needing the model to report timings it does not have.
     """
-    script = script.strip()
-    if len(script) <= limit:
-        return script
-
-    head = script[:limit]
-    cut = max(head.rfind(c) for c in ".!?")
-    if cut < limit * 0.5:
-        # No sentence break in a usable place -- keep the whole thing and let
-        # the duration cap handle it rather than ending mid-clause here.
-        print(f"[script] {len(script)}자, 문장 경계를 못 찾아 그대로 진행")
-        return script
-
-    trimmed = head[: cut + 1]
-    print(f"[script] {len(script)}자 → {len(trimmed)}자로 문장 단위 절단")
-    return trimmed
+    names = [name for name, _, _ in playbook.BEATS]
+    upto = names.index(playbook.SWITCH_AT_BEAT)
+    return sum(len(t.split()) for t in data["beat_texts"][:upto])
 
 
 # --------------------------------------------------------------------------
@@ -350,22 +379,38 @@ def build_video(
         audio = audio.subclipped(0, MAX_DURATION)
         duration = MAX_DURATION
 
-    # The background is rendered oversized and slid across the frame. Panning
-    # a larger still costs far less than a per-frame resize, and at this speed
-    # it reads as a deliberate drift rather than motion for its own sake.
-    bg_path = workdir / "bg.png"
-    make_background(data["topic_label"], data["hook"], seed, font_path).save(bg_path)
-    bg_img = ImageClip(str(bg_path))
-    span_x = bg_img.w - WIDTH
-    span_y = bg_img.h - HEIGHT
-    background = bg_img.with_duration(duration).with_position(
-        lambda t: (
-            -span_x * (0.5 + 0.5 * (t / duration)),
-            -span_y * (0.5 - 0.5 * (t / duration)),
-        )
-    )
+    layers: list = []
 
-    layers = [background]
+    # Two plates instead of one. The swap lands on the payoff beat, so the
+    # frame changes at the moment the video starts delivering -- and the top
+    # line changes with it, from the question to the answer.
+    switch_idx = payoff_word_index(data)
+    switch_at = words[switch_idx].start if 0 < switch_idx < len(words) else duration * 0.4
+    switch_at = min(max(switch_at, 4.0), duration - 3.0) if duration > 8 else duration
+
+    for variant, (top_line, start, end) in enumerate(
+        [(data["hook"], 0.0, switch_at), (data["core"], switch_at, duration)]
+    ):
+        if end - start < 0.5:
+            continue
+        plate = workdir / f"bg{variant}.png"
+        make_background(data["topic_label"], top_line, seed, font_path, variant).save(plate)
+        img = ImageClip(str(plate))
+        span_x, span_y = img.w - WIDTH, img.h - HEIGHT
+        # Each plate drifts across its own half of the travel, so the motion
+        # reads as one continuous move through the whole video.
+        base = start / duration
+        rate = (end - start) / duration
+        layers.append(
+            img.with_duration(end - start)
+            .with_start(start)
+            .with_position(
+                lambda t, b=base, r=rate, sx=span_x, sy=span_y, d=(end - start): (
+                    -sx * (b + r * (t / d)),
+                    -sy * (1 - b - r * (t / d)),
+                )
+            )
+        )
 
     # Opening card, held just long enough to read before the captions take
     # over mid-sentence.
@@ -375,8 +420,10 @@ def build_video(
         ImageClip(str(hook_path)).with_duration(min(HOOK_SECONDS, duration)).with_start(0)
     )
 
-    frames = render_caption_frames(words, font_path, seed, workdir / "caps")
-    print(f"[video] 자막 프레임 {len(frames)}개")
+    frames = render_caption_frames(
+        words, font_path, seed, workdir / "caps", data.get("keywords", ())
+    )
+    print(f"[video] 자막 프레임 {len(frames)}개 / 전환 {switch_at:.1f}초")
 
     for path, start, end in frames:
         if start >= duration:
@@ -389,6 +436,14 @@ def build_video(
             .with_duration(clip_end - start)
             .with_start(start)
             .with_position((0, CAPTION_TOP))
+        )
+
+    for path, start, end in make_progress_frames(duration, seed, workdir / "prog"):
+        layers.append(
+            ImageClip(str(path))
+            .with_duration(end - start)
+            .with_start(start)
+            .with_position((0, SAFE_BOTTOM - 20))
         )
 
     video = CompositeVideoClip(layers, size=(WIDTH, HEIGHT)).with_audio(audio)
@@ -518,8 +573,9 @@ async def run() -> int:
         print(f"\n[실패] {stage}: {exc}")
         return 1
 
+    published = len(topics.load_used_ids())
     try:
-        data = generate_script(client, topic)
+        data = generate_script(client, topic, published)
     except Exception as exc:  # noqa: BLE001
         return fail("script", exc)
     print(f"[2/5] 제목: {data['title']}")
