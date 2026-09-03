@@ -6,3 +6,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-02,T005,엣지 컴퓨팅이 클라우드 비용을 줄이는 방법,엣지컴퓨팅 클라우드 비용 절감: 데이터 트래픽 90% 줄이는 개발 팁,3YBKMyjmank,uploaded,46.5,
 2026-09-02,T006,AI 코딩 어시스턴트가 개발자 생산성에 미치는 실제 영향,,,failed:script,,"503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABLE'}}"
 2026-09-02,T006,AI 코딩 어시스턴트가 개발자 생산성에 미치는 실제 영향,AI 코딩 생산성 실제 데이터 검증! 개발자가 겪는 체감 변화 3가지,cqMaYL2bt7w,uploaded,44.6,
+2026-09-03,T007,벡터 데이터베이스가 검색 시스템을 어떻게 바꾸고 있는가,벡터 데이터베이스가 기존 키워드 검색을 완전히 바꾸는 진짜 이유,0ilcopU1ltE,uploaded,55.9,
