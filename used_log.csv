@@ -14,3 +14,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-03,T011,마이크로프론트엔드가 대규모 팀에 필요한 이유,"마이크로프론트엔드, 사실 성능 때문에 쓰는 게 아닙니다",r3tGTad_3Q8,uploaded,44.8,
 2026-09-03,T012,Zero Trust 보안 모델이 기본값이 되는 이유,,,failed:upload,,"('invalid_client: The provided client secret is invalid.', {'error': 'invalid_client', 'error_description': 'The provided client secret is invalid.'})"
 2026-09-03,T012,Zero Trust 보안 모델이 기본값이 되는 이유,Zero Trust 보안: 사내 망만 믿고 세션 검증 안 했다가 생긴 일,-YuujBQANZw,uploaded,44.6,
+2026-09-03,T013,데이터 파이프라인에서 배치 대신 스트리밍을 선택하는 시점,데이터 파이프라인 배치 대신 스트리밍을 선택하는 진짜 이유,6hNAowq1OfU,uploaded,43.2,
