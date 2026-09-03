@@ -113,10 +113,22 @@ def load_used_ids() -> set[str]:
 
 
 def load_used_topics() -> list[str]:
+    """Topic text of everything that actually reached YouTube.
+
+    Filtered on the video id for the same reason `load_used_ids` is. A failed
+    run still writes its topic to the log, and counting those made a topic
+    match its own failure row at similarity 1.0 -- so one transient 503 was
+    enough to block that topic from ever publishing. That is exactly the
+    outcome the "failures do not consume topics" rule exists to prevent.
+    """
     if not USED_LOG.exists():
         return []
     with open(USED_LOG, newline="", encoding="utf-8") as f:
-        return [row["topic"] for row in csv.DictReader(f) if row.get("topic")]
+        return [
+            row["topic"]
+            for row in csv.DictReader(f)
+            if row.get("topic") and row.get("youtube_video_id")
+        ]
 
 
 def next_id(bank: list[dict]) -> str:
