@@ -16,3 +16,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-03,T012,Zero Trust 보안 모델이 기본값이 되는 이유,Zero Trust 보안: 사내 망만 믿고 세션 검증 안 했다가 생긴 일,-YuujBQANZw,uploaded,44.6,
 2026-09-03,T013,데이터 파이프라인에서 배치 대신 스트리밍을 선택하는 시점,데이터 파이프라인 배치 대신 스트리밍을 선택하는 진짜 이유,6hNAowq1OfU,uploaded,43.2,
 2026-09-04,T014,타입스크립트가 프론트엔드를 넘어 백엔드 표준이 되는 흐름,"자바 vs 타입스크립트 백엔드, 언제 뭘 써야 할까?",bTBM7_R4Dlw,uploaded,49.2,
+2026-09-04,T015,AI 에이전트가 소프트웨어 개발 워크플로우를 자동화하는 방식,AI 에이전트로 자동화할 때 흔히 놓치는 것 | 피드백 루프,HS_poSiWpKw,uploaded,42.4,
