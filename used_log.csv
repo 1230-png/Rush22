@@ -22,3 +22,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-05,T018,데이터베이스 샤딩 없이 확장하는 최신 기법들,DB 샤딩 없이 트래픽 10배 버티는 최신 CDC 기법,jdurK22RcBM,uploaded,45.3,
 2026-09-05,T019,WebGPU가 브라우저 그래픽 성능을 바꾸는 방법,WebGPU 성능 원리: WebGL보다 10배 빠른 진짜 이유,DUYvErUHo3s,uploaded,43.4,
 2026-09-05,T020,로우코드·노코드가 전문 개발자를 대체할 수 있을까,"노코드 vs 커스텀 코드, 개발자는 언제 뭘 써야 할까?",DiBb0ojZv2o,uploaded,38.2,
+2026-09-05,T021,CI/CD 파이프라인에서 AI가 코드 리뷰를 자동화하는 사례,CI/CD AI 코드 리뷰 적용할 때 흔히 놓치는 핵심 설정,NAlXjjVkAas,uploaded,40.8,
