@@ -25,3 +25,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-05,T021,CI/CD 파이프라인에서 AI가 코드 리뷰를 자동화하는 사례,CI/CD AI 코드 리뷰 적용할 때 흔히 놓치는 핵심 설정,NAlXjjVkAas,uploaded,40.8,
 2026-09-06,T022,분산 시스템에서 합의 알고리즘이 왜 여전히 중요한가,분산 시스템 합의 알고리즘이 여전히 필수인 2가지 이유,emtumJyTcBo,uploaded,46.6,
 2026-09-06,T023,프라이버시 우선 설계가 법적 필수가 되는 흐름,개인정보보호법: 사실 DB 암호화만으로는 법적 안전지대가 아닙니다,dBFZHdTVHDY,uploaded,43.6,
+2026-09-06,T024,모놀리스로 회귀하는 팀들이 늘어나는 이유,MSA 버리고 모놀리스 돌아가서 비용 90% 줄인 이유,oO-7dLPeCWA,uploaded,43.9,
