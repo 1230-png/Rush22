@@ -27,3 +27,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-06,T023,프라이버시 우선 설계가 법적 필수가 되는 흐름,개인정보보호법: 사실 DB 암호화만으로는 법적 안전지대가 아닙니다,dBFZHdTVHDY,uploaded,43.6,
 2026-09-06,T024,모놀리스로 회귀하는 팀들이 늘어나는 이유,MSA 버리고 모놀리스 돌아가서 비용 90% 줄인 이유,oO-7dLPeCWA,uploaded,43.9,
 2026-09-06,T025,실시간 협업 툴의 CRDT 기술 원리,CRDT 실시간 협업 툴이 충돌 없이 동시 수정되는 진짜 이유,MSfxvmTG6qU,uploaded,42.5,
+2026-09-07,T026,AI 모델 경량화로 온디바이스 추론이 가능해진 배경,"온디바이스 AI 경량화: 양자화 vs 가지치기, 언제 뭘 쓰나",Ih-J7V2DNj8,uploaded,49.5,
