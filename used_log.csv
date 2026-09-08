@@ -33,3 +33,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-07,T029,컨테이너 이미지 보안 스캐닝이 필수가 된 배경,컨테이너 보안 스캔: 사실 공식 이미지는 안전하지 않습니다,XQeQyA4na2c,uploaded,42.1,
 2026-09-08,T030,함수형 프로그래밍이 다시 주목받는 이유,함수형 프로그래밍 이유 | 변수 하나 잘못 공유해서 생긴 대형 사고,-KLbvf2jiWE,uploaded,47.4,
 2026-09-08,T031,데이터 레이크하우스가 전통적 데이터 웨어하우스를 대체하는 흐름,데이터 레이크하우스가 비싼 DW를 대체하는 진짜 이유,MeoM7ZBzegU,uploaded,46.8,
+2026-09-08,T032,AI 기반 테스트 자동화가 QA 팀을 바꾸는 방식,,,failed:script,,"모든 모델 실패: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABL"
