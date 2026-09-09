@@ -35,3 +35,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-08,T031,데이터 레이크하우스가 전통적 데이터 웨어하우스를 대체하는 흐름,데이터 레이크하우스가 비싼 DW를 대체하는 진짜 이유,MeoM7ZBzegU,uploaded,46.8,
 2026-09-08,T032,AI 기반 테스트 자동화가 QA 팀을 바꾸는 방식,,,failed:script,,"모든 모델 실패: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABL"
 2026-09-08,T032,AI 기반 테스트 자동화가 QA 팀을 바꾸는 방식,"AI 테스트 자동화, 코드 생성 vs 자가 치유 언제 쓸까?",giK6QdmLt70,uploaded,46.7,
+2026-09-09,T033,웹 성능에서 Core Web Vitals가 SEO에 미치는 영향,Core Web Vitals SEO 최적화할 때 흔히 놓치는 것,ZSvHsWp2Z8c,uploaded,37.5,
