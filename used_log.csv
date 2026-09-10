@@ -42,3 +42,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-10,T037,인프라 as 코드에서 Terraform 대안들이 뜨는 이유,테라폼 대안 도구들이 빠르게 떠오르는 진짜 이유,7PF4ES5gKSA,uploaded,42.5,
 2026-09-10,T038,브라우저 확장 프로그램 개발이 다시 주목받는 배경,"웹 개발자 확장 프로그램 vs 웹 앱, 언제 뭘 쓰나",lshFOYj-Vz0,uploaded,43.4,
 2026-09-10,T039,실시간 음성 AI가 고객 지원 산업을 바꾸는 방식,실시간 음성 AI 구축할 때 흔히 놓치는 파이프라인 지연 원인,DlLiSQk_Lfg,uploaded,36.6,
+2026-09-10,T040,소프트웨어 공급망 보안이 왜 요즘 화두인가,공급망 보안이 핫한 이유: npm install 하나로 서버가 터지는 2단계 메커니즘,XorpQQY5x24,uploaded,43.2,
