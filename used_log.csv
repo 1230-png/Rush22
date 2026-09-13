@@ -54,3 +54,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-13,T049,"실시간 데이터 동기화, Firebase 대안 비교",실시간 DB 동기화 파이어베이스 대안이 트래픽을 견디는 진짜 이유,E7ILG1xbmyY,uploaded,42.4,
 2026-09-13,T050,AI 모델 평가가 프로덕션 배포의 새 병목이 된 이유,"AI 모델 평가 코드 vs LLM, 프로덕션 배포 병목 줄이는 기준",Rlyg3ykCHEU,uploaded,42.4,
 2026-09-13,T051,웹어셈블리 기반 플러그인 시스템이 확장성을 바꾸는 방식,웹어셈블리 플러그인 시스템 확장성 설계할 때 흔히 놓치는 것,UPnaqSw8j4o,uploaded,43.2,
+2026-09-13,T052,소규모 팀이 대규모 인프라 없이 확장하는 아키텍처 패턴,백엔드 아키텍처: 소규모 팀이 대규모 트래픽 견디는 패턴 2가지,_CSU24VOQAY,uploaded,50.4,
