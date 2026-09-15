@@ -61,3 +61,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-15,T056,AI 기반 버그 예측이 코드 리뷰를 바꾸는 방식,AI 버그 예측: 구문 분석 vs Git 이력 분석 언제 쓰나,BuI83-Jl7v8,uploaded,43.8,
 2026-09-15,T057,하이브리드 클라우드 전략이 다시 주목받는 이유,하이브리드 클라우드 전환할 때 흔히 놓치는 비용 계산법,BsxAak0U-0I,uploaded,42.5,
 2026-09-15,T058,웹 표준화 과정에서 개발자 의견이 반영되는 방식,,,failed:script,,"모든 모델 실패: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABL"
+2026-09-15,T058,웹 표준화 과정에서 개발자 의견이 반영되는 방식,웹 표준 개발자 의견이 반영되는 3가지 단계와 TC39 프로세스,YqWA4LQrUgs,uploaded,45.6,
