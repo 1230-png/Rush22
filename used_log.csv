@@ -59,3 +59,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-14,T054,지속가능한 오픈소스 메인테이너 생태계 문제,오픈소스 의존성 검증 안 해서 생긴 일: XZ Utils 백도어 사태,v7nfb6tqQiI,uploaded,47.1,
 2026-09-14,T055,실시간 스트리밍 서비스의 지연시간을 줄이는 기술들,라이브 스트리밍 지연시간을 1초대로 줄이는 진짜 원리,P8NVIxbt940,uploaded,47.7,
 2026-09-15,T056,AI 기반 버그 예측이 코드 리뷰를 바꾸는 방식,AI 버그 예측: 구문 분석 vs Git 이력 분석 언제 쓰나,BuI83-Jl7v8,uploaded,43.8,
+2026-09-15,T057,하이브리드 클라우드 전략이 다시 주목받는 이유,하이브리드 클라우드 전환할 때 흔히 놓치는 비용 계산법,BsxAak0U-0I,uploaded,42.5,
