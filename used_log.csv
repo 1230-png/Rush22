@@ -63,3 +63,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-15,T058,웹 표준화 과정에서 개발자 의견이 반영되는 방식,,,failed:script,,"모든 모델 실패: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABL"
 2026-09-15,T058,웹 표준화 과정에서 개발자 의견이 반영되는 방식,웹 표준 개발자 의견이 반영되는 3가지 단계와 TC39 프로세스,YqWA4LQrUgs,uploaded,45.6,
 2026-09-15,T059,저전력 엣지 디바이스에서 AI 추론을 돌리는 최신 기법,엣지 AI 추론 속도: 사실 NPU 성능 때문이 아닙니다,i0Ke5DIwI2I,uploaded,48.5,
+2026-09-16,T060,주니어 개발자가 가장 먼저 배워야 할 기술 스택,"주니어 개발자 기술 스택, DB 인덱스 안 배우고 쿼리 짰다가 서버 터진 일",PqYylUkKi88,uploaded,43.9,
