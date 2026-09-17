@@ -66,3 +66,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-16,T060,주니어 개발자가 가장 먼저 배워야 할 기술 스택,"주니어 개발자 기술 스택, DB 인덱스 안 배우고 쿼리 짰다가 서버 터진 일",PqYylUkKi88,uploaded,43.9,
 2026-09-16,T061,DB 커넥션 풀을 무작정 크게 설정하면 오히려 서버가 느려지는 이유,DB 커넥션 풀 무작정 키우면 서버가 느려지는 진짜 이유,KPTd9qeLVXE,uploaded,42.0,
 2026-09-16,T062,PostgreSQL MVCC 구조에서 Autovacuum 설정이 DB 성능을 좌우하는 이유,"PostgreSQL Autovacuum 설정: 기본값 vs 공격적 튜닝, 언제 뭘 쓰나",Azrf2FngUQ8,uploaded,43.0,
+2026-09-17,T063,쓰기 작업이 폭증할 때 B-Tree 대신 LSM-Tree 구조를 선택해야 하는 이유,DB 쓰기 폭증 LSM-Tree B-Tree 차이: 데이터베이스 선택 시 흔히 놓치는 것,fc8L7rI7jQk,uploaded,41.5,
