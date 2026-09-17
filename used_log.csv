@@ -67,3 +67,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-16,T061,DB 커넥션 풀을 무작정 크게 설정하면 오히려 서버가 느려지는 이유,DB 커넥션 풀 무작정 키우면 서버가 느려지는 진짜 이유,KPTd9qeLVXE,uploaded,42.0,
 2026-09-16,T062,PostgreSQL MVCC 구조에서 Autovacuum 설정이 DB 성능을 좌우하는 이유,"PostgreSQL Autovacuum 설정: 기본값 vs 공격적 튜닝, 언제 뭘 쓰나",Azrf2FngUQ8,uploaded,43.0,
 2026-09-17,T063,쓰기 작업이 폭증할 때 B-Tree 대신 LSM-Tree 구조를 선택해야 하는 이유,DB 쓰기 폭증 LSM-Tree B-Tree 차이: 데이터베이스 선택 시 흔히 놓치는 것,fc8L7rI7jQk,uploaded,41.5,
+2026-09-17,T064,분산 트랜잭션 없이 데이터 일관성을 보장하는 Transactional Outbox 패턴,분산 트랜잭션 없이 데이터 일관성 지키는 3단계 방법,sME79B0dAOQ,uploaded,47.1,
