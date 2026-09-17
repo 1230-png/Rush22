@@ -70,3 +70,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-17,T064,분산 트랜잭션 없이 데이터 일관성을 보장하는 Transactional Outbox 패턴,분산 트랜잭션 없이 데이터 일관성 지키는 3단계 방법,sME79B0dAOQ,uploaded,47.1,
 2026-09-17,T065,카프카 Log Compaction 설정 시 특정 메시지가 소실되는 원인과 예방법,카프카 Log Compaction 메시지 소실 원인과 delete.retention.ms,6XgTGWDKv40,uploaded,41.4,
 2026-09-17,T066,HTTP/3 UDP 기반 QUIC 프로토콜이 패킷 손실 시 TCP보다 빨라지는 원리,HTTP/3 QUIC: 패킷 1개 떨어졌는데 앱 전체가 멈춰서 생긴 일,-8jEn3Zmgkc,uploaded,42.1,
+2026-09-17,T067,gRPC Protobuf 버저닝 시 개발자가 자주 범하는 하위 호환성 실수,gRPC Protobuf 버저닝에서 필드 번호를 재사용하면 안 되는 이유,go4V6vcqnGU,uploaded,44.6,
