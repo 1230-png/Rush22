@@ -72,3 +72,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-17,T066,HTTP/3 UDP 기반 QUIC 프로토콜이 패킷 손실 시 TCP보다 빨라지는 원리,HTTP/3 QUIC: 패킷 1개 떨어졌는데 앱 전체가 멈춰서 생긴 일,-8jEn3Zmgkc,uploaded,42.1,
 2026-09-17,T067,gRPC Protobuf 버저닝 시 개발자가 자주 범하는 하위 호환성 실수,gRPC Protobuf 버저닝에서 필드 번호를 재사용하면 안 되는 이유,go4V6vcqnGU,uploaded,44.6,
 2026-09-18,T068,엘라스틱서치 색인 성능을 10배 올리는 Bulk 및 Refresh Interval 설정,엘라스틱서치 대량 색인 속도 10배 올리기: Index API vs Bulk API 설정 비교,zX3aF1YrAeI,uploaded,41.8,
+2026-09-18,T069,Next.js Server Actions 사용 시 클라이언트에 데이터가 노출되는 보안 위험,Next.js 서버 액션 쓸 때 흔히 놓치는 데이터 유출 위험,ygksYrNfhmg,uploaded,41.1,
