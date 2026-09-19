@@ -78,3 +78,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-19,T071,미디어 쿼리 대신 컨테이너 쿼리를 활용한 진정한 유연한 컴포넌트 설계법,CSS 컨테이너 쿼리: 반응형 컴포넌트에 미디어 쿼리를 쓰면 안 되는 이유,1J07Mp8TLek,uploaded,42.8,
 2026-09-19,T072,Single Page App에서 이벤트 리스너 미해제로 발생하는 브라우저 메모리 누수,SPA 메모리 누수: 이벤트 리스너 안 지웠다가 브라우저 탭 터진 일,dmSrP25MjCA,uploaded,43.4,
 2026-09-19,T073,Node.js 이벤트 루프를 블로킹하여 서비스 전체를 멈추게 만드는 동기 함수들,Node.js 이벤트 루프: 동기 함수가 서버 멈추는 진짜 이유,bijelS4tjaI,uploaded,42.3,
+2026-09-19,T074,Java 가상 스레드와 Go 고루틴의 OS 스레드 스케줄링 방식 차이점,"Java 가상 스레드 vs Go 고루틴, 동시성 스케줄링 언제 뭘 쓰나",a5YOaqbcehE,uploaded,42.3,
