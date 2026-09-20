@@ -80,3 +80,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-19,T073,Node.js 이벤트 루프를 블로킹하여 서비스 전체를 멈추게 만드는 동기 함수들,Node.js 이벤트 루프: 동기 함수가 서버 멈추는 진짜 이유,bijelS4tjaI,uploaded,42.3,
 2026-09-19,T074,Java 가상 스레드와 Go 고루틴의 OS 스레드 스케줄링 방식 차이점,"Java 가상 스레드 vs Go 고루틴, 동시성 스케줄링 언제 뭘 쓰나",a5YOaqbcehE,uploaded,42.3,
 2026-09-20,T075,Go 언어 Garbage Collector가 처리량보다 지연시간 단축을 택한 설계 배경,Go 언어 GC 튜닝할 때 흔히 놓치는 가비지 컬렉터의 비밀,IX3NfbycxJU,uploaded,43.5,
+2026-09-20,T076,C++ Smart Pointer에서 unique_ptr과 shared_ptr의 메모리 오버헤드 차이,C++ 스마트 포인터 메모리 낭비 줄이는 2가지 체크포인트,DCjAldAA9tM,uploaded,41.2,
