@@ -1,7 +1,10 @@
 name: Rush22 Daily Shorts
 
+# 2026-09-21 중단. 채널을 롱폼 중심으로 재설계하기로 했고, 여기서 나오는
+# 숏츠는 전부 삭제 예정이라 계속 돌리면 API 할당량과 삭제할 분량만 늘어난다.
+# 되살리려면 아래 schedule 블록의 주석만 풀면 된다.
 on:
-  schedule:
+  # schedule:
     # Four a day, KST = UTC+9. Volume is the one lever we control: the Shorts
     # feed decides exposure per video, so twice the videos is twice the draws.
     # videos.insert costs 1,600 of 10,000 daily units, leaving headroom for a
@@ -9,10 +12,10 @@ on:
     #
     # GitHub's scheduler routinely fires 20-60 minutes late under load; that
     # is expected and not worth chasing.
-    - cron: '0 22 * * *'   # 07:00 KST
-    - cron: '0 3 * * *'    # 12:00 KST
-    - cron: '0 9 * * *'    # 18:00 KST
-    - cron: '0 13 * * *'   # 22:00 KST
+    #   - cron: '0 22 * * *'   # 07:00 KST
+    #   - cron: '0 3 * * *'    # 12:00 KST
+    #   - cron: '0 9 * * *'    # 18:00 KST
+    #   - cron: '0 13 * * *'   # 22:00 KST
   workflow_dispatch:
 
 permissions:

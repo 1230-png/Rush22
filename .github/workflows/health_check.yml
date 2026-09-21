@@ -3,9 +3,11 @@ name: 발행 상태 점검
 # The channel is meant to run for months without anyone watching it. This is
 # what notices when it stops: a stalled pipeline opens an issue on its own
 # rather than waiting to be discovered.
+# 발행을 의도적으로 멈췄으므로 점검도 함께 멈춘다. 켜두면 "이틀 넘게
+# 발행 없음"을 고장으로 판단해 이슈를 반복해서 연다.
 on:
-  schedule:
-    - cron: '0 6 * * *'   # 15:00 KST, clear of every publish slot
+  # schedule:
+  #   - cron: '0 6 * * *'   # 15:00 KST, clear of every publish slot
   workflow_dispatch:
 
 permissions:
