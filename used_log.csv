@@ -84,3 +84,4 @@ date,topic_id,topic,title,youtube_video_id,status,duration_sec,note
 2026-09-20,T077,자바스크립트 객체 속성 순서를 바꾸면 V8 엔진 성능이 떨어지는 이유,자바스크립트 V8 성능 저하: 사실 객체 키 순서는 상관없지 않습니다,5gMZq-0o2qk,uploaded,43.8,
 2026-09-20,T078,eBPF 기술이 사이드카 에이전트 없이 커널 레벨에서 네트워크를 감시하는 방식,eBPF 커널 감시: 사이드카 에이전트 달았더니 서버비만 30% 늘어난 이유,YqObGivRx6U,uploaded,40.4,
 2026-09-21,T079,클라우드 VPC 간 데이터 전송 비용이 의외의 트래픽 폭탄이 되는 원인,클라우드 VPC 데이터 전송 비용이 요금 폭탄이 되는 진짜 이유,leNKbTzjB7M,uploaded,45.9,
+2026-09-21,T080,Kubernetes Pod가 메모리 한도 직전에 OOMKilled 당하는 진짜 이유,,,failed:script,,"모든 모델 실패: 503 UNAVAILABLE. {'error': {'code': 503, 'message': 'This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.', 'status': 'UNAVAILABL"
