@@ -22,7 +22,7 @@ OUT = ROOT / "out"
 HISTORY = ROOT / "history.json"
 FONT = os.environ.get("FONT", "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc")
 # tried in order; the free tier often returns 503 on one model while another works
-MODELS = os.environ.get("GEMINI_MODELS", "gemini-3.6-flash,gemini-flash-latest,gemini-2.5-flash").split(",")
+MODELS = os.environ.get("GEMINI_MODELS", "gemini-3.6-flash,gemini-flash-latest").split(",")
 KO_VOICES = ["ko-KR-SunHiNeural", "ko-KR-InJoonNeural"]
 EN_VOICE = "en-US-AriaNeural"
 SIZE = {"short": (1080, 1920), "long": (1920, 1080)}
@@ -100,7 +100,11 @@ no song lyrics, drama quotes, real people or brand names."""
     review = ("You are a strict native Korean editor and teacher. Fix any unnatural Korean, spelling or spacing "
               "errors, wrong romanization and wrong English translations in this JSON. Keep the same structure "
               "and item count. Return the corrected JSON only.\n" + json.dumps(script, ensure_ascii=False))
-    return retry(lambda: gemini(review))
+    try:
+        return retry(lambda: gemini(review))
+    except Exception as e:  # an overloaded reviewer must not stop the daily upload
+        print(f"review skipped: {e}", file=sys.stderr)
+        return script
 
 
 def ff(*args):
