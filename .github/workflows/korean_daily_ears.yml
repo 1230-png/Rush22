@@ -11,6 +11,10 @@ on:
         type: choice
         options: [short, long]
         default: short
+      privacy:
+        type: choice
+        options: [public, private, unlisted]
+        default: public
 
 permissions:
   contents: write
@@ -37,6 +41,7 @@ jobs:
           YT_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YT_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YT_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          PRIVACY: ${{ inputs.privacy || 'public' }}
       - name: save history
         run: |
           git config user.name github-actions
