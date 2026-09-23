@@ -20,6 +20,7 @@ from PIL import Image, ImageDraw, ImageFont
 ROOT = pathlib.Path(__file__).parent
 OUT = ROOT / "out"
 HISTORY = ROOT / "history.json"
+QUEUE = ROOT / "queue"  # fallback scripts: {kind}_*.json with a "format" key
 FONT = os.environ.get("FONT", "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc")
 # tried in order; the free tier often returns 503 on one model while another works
 MODELS = os.environ.get("GEMINI_MODELS", "gemini-3.6-flash,gemini-flash-latest").split(",")
@@ -48,7 +49,7 @@ DIALOGUE = {"situation", "conversation"}
 FOOTER = "Subscribe for daily Korean listening practice: https://www.youtube.com/@KoreanDailyEars\n\n#LearnKorean #KoreanPhrases #KoreanListening"
 
 
-def retry(fn, tries=6):
+def retry(fn, tries=3):
     for i in range(tries):
         try:
             return fn()
@@ -238,7 +239,17 @@ def main(kind):
     hist = json.loads(HISTORY.read_text(encoding="utf-8"))
     n = sum(v["kind"] == kind for v in hist["videos"])
     fmt, desc, playlist_title = FORMATS[kind][n % len(FORMATS[kind])]
-    script = write_script(kind, desc, hist)
+    queued = sorted(QUEUE.glob(f"{kind}_*.json"))
+    try:
+        script = write_script(kind, desc, hist)
+    except Exception as e:  # Gemini down or out of quota: publish a pre-written script instead
+        if not queued:
+            raise
+        print(f"gemini failed ({e}); using {queued[0].name}", file=sys.stderr)
+        script = json.loads(queued[0].read_text(encoding="utf-8"))
+        queued[0].unlink()
+        fmt = script["format"]
+        playlist_title = next(t for f, _, t in FORMATS[kind] if f == fmt)
     seen = set(hist["phrases"])
     items = [it for it in script["items"] if it["ko"] not in seen] or script["items"]
     script["items"] = items

@@ -1,0 +1,55 @@
+{
+ "format": "situation",
+ "title": "Ordering Coffee in Korean | Real Cafe Conversation for Travelers",
+ "description": "A real cafe conversation in Korean between a barista and a customer. Perfect for your trip to Korea.",
+ "tags": [
+  "learn korean",
+  "korean conversation",
+  "korean for travel",
+  "order coffee in korean",
+  "korean cafe",
+  "korean phrases",
+  "travel korea",
+  "speak korean",
+  "korean for beginners",
+  "shorts"
+ ],
+ "items": [
+  {
+   "ko": "주문하시겠어요?",
+   "roman": "jumunhasigesseoyo?",
+   "en": "Are you ready to order?",
+   "note": "Barista"
+  },
+  {
+   "ko": "아이스 아메리카노 한 잔 주세요",
+   "roman": "aiseu amerikano han jan juseyo",
+   "en": "One iced americano, please",
+   "note": "잔 = counter for cups"
+  },
+  {
+   "ko": "드시고 가세요?",
+   "roman": "deusigo gaseyo?",
+   "en": "Is it for here?",
+   "note": "Literally: eat and then go?"
+  },
+  {
+   "ko": "아니요, 테이크아웃이요",
+   "roman": "aniyo, teikeuausiyo",
+   "en": "No, to go, please",
+   "note": ""
+  },
+  {
+   "ko": "사이즈는 어떻게 해 드릴까요?",
+   "roman": "saijeuneun eotteoke hae deurilkkayo?",
+   "en": "What size would you like?",
+   "note": ""
+  },
+  {
+   "ko": "제일 큰 걸로 주세요",
+   "roman": "jeil keun geollo juseyo",
+   "en": "The largest one, please",
+   "note": ""
+  }
+ ]
+}
