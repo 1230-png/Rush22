@@ -21,7 +21,8 @@ ROOT = pathlib.Path(__file__).parent
 OUT = ROOT / "out"
 HISTORY = ROOT / "history.json"
 FONT = os.environ.get("FONT", "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc")
-MODEL = os.environ.get("GEMINI_MODEL", "gemini-flash-latest")
+# tried in order; the free tier often returns 503 on one model while another works
+MODELS = os.environ.get("GEMINI_MODELS", "gemini-3.6-flash,gemini-flash-latest,gemini-2.5-flash").split(",")
 KO_VOICES = ["ko-KR-SunHiNeural", "ko-KR-InJoonNeural"]
 EN_VOICE = "en-US-AriaNeural"
 SIZE = {"short": (1080, 1920), "long": (1920, 1080)}
@@ -55,14 +56,25 @@ def retry(fn, tries=3):
             if i == tries - 1:
                 raise
             print(f"retry {i + 1}: {e}", file=sys.stderr)
-            time.sleep(10 * (i + 1))
+            time.sleep(60 * (i + 1))
 
 
 def gemini(prompt):
+    err = None
+    for model in MODELS:
+        try:
+            return gemini_model(model, prompt)
+        except Exception as e:
+            print(f"{model}: {e}", file=sys.stderr)
+            err = e
+    raise err
+
+
+def gemini_model(model, prompt):
     body = {"contents": [{"parts": [{"text": prompt}]}],
             "generationConfig": {"responseMimeType": "application/json", "temperature": 0.9}}
     req = urllib.request.Request(
-        f"https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent",
+        f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
         json.dumps(body).encode(),
         {"Content-Type": "application/json", "x-goog-api-key": os.environ["GEMINI_API_KEY"]})
     with urllib.request.urlopen(req, timeout=600) as r:
