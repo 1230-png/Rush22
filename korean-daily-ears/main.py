@@ -231,8 +231,8 @@ def add_to_playlist(yt, hist, fmt, playlist_title, video_id):
             "snippet": {"title": playlist_title, "defaultLanguage": "en"},
             "status": {"privacyStatus": "public"}}).execute()["id"]
         hist["playlists"][fmt] = pid
-    yt.playlistItems().insert(part="snippet", body={"snippet": {
-        "playlistId": pid, "resourceId": {"kind": "youtube#video", "videoId": video_id}}}).execute()
+    retry(lambda: yt.playlistItems().insert(part="snippet", body={"snippet": {  # 409s right after playlist creation
+        "playlistId": pid, "resourceId": {"kind": "youtube#video", "videoId": video_id}}}).execute())
 
 
 def main(kind):
