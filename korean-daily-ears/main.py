@@ -48,7 +48,7 @@ DIALOGUE = {"situation", "conversation"}
 FOOTER = "Subscribe for daily Korean listening practice: https://www.youtube.com/@KoreanDailyEars\n\n#LearnKorean #KoreanPhrases #KoreanListening"
 
 
-def retry(fn, tries=3):
+def retry(fn, tries=6):
     for i in range(tries):
         try:
             return fn()
