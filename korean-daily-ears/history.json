@@ -1,1 +1,22 @@
-{"videos": [], "phrases": [], "playlists": {}}
+{
+ "videos": [
+  {
+   "date": "2026-09-23",
+   "kind": "short",
+   "format": "slang",
+   "title": "6 Korean Slang Words Koreans Use Every Day | Learn Korean",
+   "id": "p9tb9Nshhsc"
+  }
+ ],
+ "phrases": [
+  "오운완",
+  "점메추 해 줘",
+  "갓생 살자",
+  "아, 킹받네",
+  "알잘딱깔센",
+  "완전 스불재야"
+ ],
+ "playlists": {
+  "slang": "PLAJMfjH-antk"
+ }
+}
