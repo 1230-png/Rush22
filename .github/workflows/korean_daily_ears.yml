@@ -1,0 +1,45 @@
+name: Korean Daily Ears
+
+on:
+  schedule:
+    - cron: "0 14 * * *"    # short - 10am US East
+    - cron: "0 23 * * *"    # short - 7pm US East
+    - cron: "0 12 * * 1,4"  # long  - Mon/Thu
+  workflow_dispatch:
+    inputs:
+      kind:
+        type: choice
+        options: [short, long]
+        default: short
+
+permissions:
+  contents: write
+
+concurrency: korean-daily-ears
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    defaults:
+      run:
+        working-directory: korean-daily-ears
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-cjk
+      - run: pip install -r requirements.txt
+      - run: python main.py ${{ inputs.kind || (github.event.schedule == '0 12 * * 1,4' && 'long' || 'short') }}
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          YT_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+      - name: save history
+        run: |
+          git config user.name github-actions
+          git config user.email github-actions@users.noreply.github.com
+          git add history.json
+          git diff --cached --quiet || (git commit -m "Korean Daily Ears: log upload" && git pull --rebase && git push)
