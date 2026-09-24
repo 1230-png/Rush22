@@ -13,6 +13,13 @@
    "format": "real_vs_textbook",
    "title": "What Koreans ACTUALLY Say vs Textbook Korean | Learn Korean",
    "id": "2cU_lUBguY4"
+  },
+  {
+   "date": "2026-09-24",
+   "kind": "short",
+   "format": "situation",
+   "title": "How to Order a Haircut in Korea | Korean Hair Salon Phrases | Learn Korean",
+   "id": "K9LJCU2WrF0"
   }
  ],
  "phrases": [
@@ -27,10 +34,17 @@
   "기절할 것 같아요.",
   "미쳤어요!",
   "당 떨어졌어요.",
-  "금방 갈게요!"
+  "금방 갈게요!",
+  "안녕하세요! 오늘 어떤 스타일로 해 드릴까요?",
+  "그냥 다듬고, 기장은 조금만 쳐 주세요.",
+  "숱도 좀 쳐 드릴까요? 많이 무거워 보이네요.",
+  "네, 가볍게 숱 정리 좀 해주세요.",
+  "앞머리는 눈썹 아래까지 잘라 드릴까요?",
+  "네, 딱 그 정도로만 맞춰 주세요!"
  ],
  "playlists": {
   "slang": "PLAJMfjH-antk",
-  "real_vs_textbook": "PLETQF4aEJ5Tc"
+  "real_vs_textbook": "PLETQF4aEJ5Tc",
+  "situation": "PLa1ecTpKI-hw"
  }
 }
