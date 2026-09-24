@@ -9,7 +9,7 @@ on:
     inputs:
       kind:
         type: choice
-        options: [short, long]
+        options: [short, long, backfill]
         default: short
       privacy:
         type: choice

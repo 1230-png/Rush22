@@ -46,6 +46,13 @@ FORMATS = {
     ],
 }
 DIALOGUE = {"situation", "conversation"}
+# Coupang Partners link: "Korean for Vietnamese speakers, Beginner 1" (product 8856886897).
+# Korean law (and Coupang's terms) require this exact Korean sentence; the English line is for our viewers.
+# The disclosure goes first because YouTube folds the rest of the description.
+COUPANG_LINK = "https://link.coupang.com/a/hjlBe4SG4q"
+DISCLOSURE = ("이 포스팅은 쿠팡 파트너스 활동의 일환으로, 이에 따른 일정액의 수수료를 제공받습니다.\n"
+              "As a Coupang Partner, this channel earns a commission from qualifying purchases.")
+BOOK = f"📚 Korean beginner textbook (ships within Korea): {COUPANG_LINK}"
 FOOTER = "Subscribe for daily Korean listening practice: https://www.youtube.com/@KoreanDailyEars\n\n#LearnKorean #KoreanPhrases #KoreanListening"
 
 
@@ -206,7 +213,8 @@ def youtube():
 def upload(yt, path, kind, script, items):
     from googleapiclient.http import MediaFileUpload
     title = script["title"][:90] + (" #shorts" if kind == "short" else "")
-    desc = "\n".join([script["description"], "", *(f"{it['ko']} - {it['en']}" for it in items[:40]), "", FOOTER])
+    desc = "\n".join([DISCLOSURE, "", script["description"], "", BOOK, "",
+                      *(f"{it['ko']} - {it['en']}" for it in items[:40]), "", FOOTER])
     tags, total = [], 0
     for t in script.get("tags", []):  # YouTube caps tags at 500 chars total
         if total + len(t) > 450:
@@ -235,8 +243,24 @@ def add_to_playlist(yt, hist, fmt, playlist_title, video_id):
         "playlistId": pid, "resourceId": {"kind": "youtube#video", "videoId": video_id}}}).execute())
 
 
+def backfill(yt, hist):
+    """Add the disclosure and book link to videos uploaded before COUPANG_LINK existed."""
+    ids = [v["id"] for v in hist["videos"]]
+    for i in range(0, len(ids), 50):
+        for v in yt.videos().list(part="snippet", id=",".join(ids[i:i + 50])).execute()["items"]:
+            sn = v["snippet"]
+            if COUPANG_LINK in sn.get("description", ""):
+                continue
+            keep = {k: sn[k] for k in ("title", "categoryId", "tags", "defaultLanguage", "defaultAudioLanguage") if k in sn}
+            keep["description"] = "\n".join([DISCLOSURE, "", sn.get("description", "").strip(), "", BOOK])[:4900]
+            yt.videos().update(part="snippet", body={"id": v["id"], "snippet": keep}).execute()
+            print(f"linked https://youtu.be/{v['id']}")
+
+
 def main(kind):
     hist = json.loads(HISTORY.read_text(encoding="utf-8"))
+    if kind == "backfill":
+        return backfill(youtube(), hist)
     n = sum(v["kind"] == kind for v in hist["videos"])
     fmt, desc, playlist_title = FORMATS[kind][n % len(FORMATS[kind])]
     queued = sorted(QUEUE.glob(f"{kind}_*.json"))
