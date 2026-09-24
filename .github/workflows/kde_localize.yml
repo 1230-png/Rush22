@@ -1,0 +1,31 @@
+name: Korean Daily Ears - channel translations
+
+# Manual only. Pushes channel_translations.json into the channel's localized
+# descriptions. Does not touch the channel name, videos, or playlists.
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  localize:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: korean-daily-ears
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python localize.py ${{ inputs.dry_run && '--dry-run' || '' }}
+        env:
+          YT_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YT_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
