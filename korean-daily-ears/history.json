@@ -20,6 +20,13 @@
    "format": "situation",
    "title": "How to Order a Haircut in Korea | Korean Hair Salon Phrases | Learn Korean",
    "id": "K9LJCU2WrF0"
+  },
+  {
+   "date": "2026-09-25",
+   "kind": "short",
+   "format": "season",
+   "title": "Must-Know Korean Phrases for Chuseok Holiday | Learn Korean",
+   "id": "cryFRdtn6Rk"
   }
  ],
  "phrases": [
@@ -40,11 +47,18 @@
   "숱도 좀 쳐 드릴까요? 많이 무거워 보이네요.",
   "네, 가볍게 숱 정리 좀 해주세요.",
   "앞머리는 눈썹 아래까지 잘라 드릴까요?",
-  "네, 딱 그 정도로만 맞춰 주세요!"
+  "네, 딱 그 정도로만 맞춰 주세요!",
+  "풍성한 한가위 되세요!",
+  "이번 추석에 고향 내려가세요?",
+  "귀성길 차가 엄청 막혀요.",
+  "맛있는 송편 좀 드셔보세요.",
+  "연휴 동안 맛있는 거 많이 드세요!",
+  "가족들과 즐거운 시간 보내세요."
  ],
  "playlists": {
   "slang": "PLAJMfjH-antk",
   "real_vs_textbook": "PLETQF4aEJ5Tc",
-  "situation": "PLa1ecTpKI-hw"
+  "situation": "PLa1ecTpKI-hw",
+  "season": "PLHR54z7LWmPI"
  }
 }
