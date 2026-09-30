@@ -90,6 +90,13 @@
    "format": "situation",
    "title": "Ordering Coffee in Korean | Real Cafe Conversation for Travelers",
    "id": "tkHGR6J4iQQ"
+  },
+  {
+   "date": "2026-09-30",
+   "kind": "short",
+   "format": "real_vs_textbook",
+   "title": "Textbook vs Real Korean: Restaurant Phrases | Learn Korean",
+   "id": "aqfQYX3g3-Y"
   }
  ],
  "phrases": [
@@ -170,7 +177,13 @@
   "드시고 가세요?",
   "아니요, 테이크아웃이요",
   "사이즈는 어떻게 해 드릴까요?",
-  "제일 큰 걸로 주세요"
+  "제일 큰 걸로 주세요",
+  "여기 주문할게요!",
+  "여기 반찬 좀 더 주세요!",
+  "이거 남은 것 좀 싸주세요.",
+  "계산은 따로따로 할게요.",
+  "저기요, 앞치마 좀 주시겠어요?",
+  "음료수는 서비스예요!"
  ],
  "playlists": {
   "slang": "PLAJMfjH-antk",
